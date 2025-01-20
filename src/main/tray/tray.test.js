@@ -2,10 +2,9 @@
 // See LICENSE.txt for license information.
 
 import {handleConfigUpdate} from 'main/app/config';
-
 import AutoLauncher from 'main/AutoLauncher';
 
-import * as tray from './tray';
+import Tray from './tray';
 
 jest.mock('path', () => ({
     join: (a, b) => b,
@@ -31,6 +30,7 @@ jest.mock('electron', () => {
             getAppPath: () => '/path/to/app',
             isReady: jest.fn(),
             setPath: jest.fn(),
+            getPath: jest.fn(() => '/valid/downloads/path'),
         },
         ipcMain: {
             emit: jest.fn(),
@@ -46,8 +46,8 @@ jest.mock('electron', () => {
 jest.mock('main/app/utils', () => ({
     handleUpdateMenuEvent: jest.fn(),
     updateSpellCheckerLocales: jest.fn(),
-    updateServerInfos: jest.fn(),
     setLoggingLevel: jest.fn(),
+    updateServerInfos: jest.fn(),
 }));
 jest.mock('main/app/intercom', () => ({
     handleMainWindowIsShown: jest.fn(),
@@ -59,10 +59,12 @@ jest.mock('main/AutoLauncher', () => ({
 jest.mock('main/badge', () => ({
     setUnreadBadgeSetting: jest.fn(),
 }));
-jest.mock('main/windows/windowManager', () => ({
-    handleUpdateConfig: jest.fn(),
+jest.mock('main/performanceMonitor', () => ({
+    registerView: jest.fn(),
+}));
+jest.mock('main/windows/mainWindow', () => ({
     sendToRenderer: jest.fn(),
-    initializeCurrentServerName: jest.fn(),
+    on: jest.fn(),
 }));
 
 describe('main/tray', () => {
@@ -73,7 +75,7 @@ describe('main/tray', () => {
     describe('config changes', () => {
         let spy;
         beforeAll(() => {
-            spy = jest.spyOn(tray, 'refreshTrayImages').mockImplementation();
+            spy = jest.spyOn(Tray, 'refreshImages').mockImplementation();
         });
         afterAll(() => {
             spy.mockRestore();
@@ -82,13 +84,13 @@ describe('main/tray', () => {
             handleConfigUpdate({
                 trayIconTheme: 'light',
             });
-            expect(tray.refreshTrayImages).toHaveBeenCalledWith('light');
+            expect(Tray.refreshImages).toHaveBeenCalledWith('light');
         });
         it('should update the tray icon color immediately when the config is updated', () => {
             handleConfigUpdate({
                 trayIconTheme: 'dark',
             });
-            expect(tray.refreshTrayImages).toHaveBeenCalledWith('dark');
+            expect(Tray.refreshImages).toHaveBeenCalledWith('dark');
         });
     });
 
@@ -102,7 +104,7 @@ describe('main/tray', () => {
         Object.defineProperty(process, 'platform', {
             value: 'darwin',
         });
-        const result = tray.refreshTrayImages('light');
+        const result = Tray.refreshImages('light');
         it.each(Object.keys(result))('match "%s"', (a) => {
             expect(result[a].image).toBe(darwinResultAllThemes[a]);
         });
@@ -122,7 +124,7 @@ describe('main/tray', () => {
         Object.defineProperty(process, 'platform', {
             value: 'win32',
         });
-        const result = tray.refreshTrayImages('light');
+        const result = Tray.refreshImages('light');
         it.each(Object.keys(result))('match "%s"', (a) => {
             expect(result[a].image).toBe(winResultLight[a]);
         });
@@ -142,7 +144,7 @@ describe('main/tray', () => {
         Object.defineProperty(process, 'platform', {
             value: 'win32',
         });
-        const result = tray.refreshTrayImages('dark');
+        const result = Tray.refreshImages('dark');
         it.each(Object.keys(result))('match "%s"', (a) => {
             expect(result[a].image).toBe(winResultDark[a]);
         });
@@ -162,7 +164,7 @@ describe('main/tray', () => {
         Object.defineProperty(process, 'platform', {
             value: 'linux',
         });
-        const result = tray.refreshTrayImages('light');
+        const result = Tray.refreshImages('light');
         it.each(Object.keys(result))('match "%s"', (a) => {
             expect(result[a].image).toBe(linuxResultLight[a]);
         });
@@ -182,7 +184,7 @@ describe('main/tray', () => {
         Object.defineProperty(process, 'platform', {
             value: 'linux',
         });
-        const result = tray.refreshTrayImages('dark');
+        const result = Tray.refreshImages('dark');
         it.each(Object.keys(result))('match "%s"', (a) => {
             expect(result[a].image).toBe(linuxResultDark[a]);
         });

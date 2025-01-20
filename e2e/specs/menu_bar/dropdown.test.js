@@ -32,9 +32,9 @@ describe('menu_bar/dropdown', function desc() {
 
         const mainWindow = this.app.windows().find((window) => window.url().includes('index'));
         const dropdownView = this.app.windows().find((window) => window.url().includes('dropdown'));
-        await mainWindow.click('.TeamDropdownButton');
-        const firstMenuItem = await dropdownView.innerText('.TeamDropdown button.TeamDropdown__button:nth-child(1) span');
-        const secondMenuItem = await dropdownView.innerText('.TeamDropdown button.TeamDropdown__button:nth-child(2) span');
+        await mainWindow.click('.ServerDropdownButton');
+        const firstMenuItem = await dropdownView.innerText('.ServerDropdown button.ServerDropdown__button:nth-child(1) span');
+        const secondMenuItem = await dropdownView.innerText('.ServerDropdown button.ServerDropdown__button:nth-child(2) span');
 
         firstMenuItem.should.equal(config.teams[0].name);
         secondMenuItem.should.equal(config.teams[1].name);
@@ -54,17 +54,17 @@ describe('menu_bar/dropdown', function desc() {
         after(afterFunc);
 
         it('MM-T4406_1 should show the dropdown', async () => {
-            let dropdownHeight = await browserWindow.evaluate((window) => window.getBrowserViews().find((view) => view.webContents.getURL().includes('dropdown')).getBounds().height);
+            let dropdownHeight = await browserWindow.evaluate((window) => window.contentView.children.find((view) => view.webContents.getURL().includes('dropdown')).getBounds().height);
             dropdownHeight.should.equal(0);
 
-            await mainWindow.click('.TeamDropdownButton');
-            dropdownHeight = await browserWindow.evaluate((window) => window.getBrowserViews().find((view) => view.webContents.getURL().includes('dropdown')).getBounds().height);
+            await mainWindow.click('.ServerDropdownButton');
+            dropdownHeight = await browserWindow.evaluate((window) => window.contentView.children.find((view) => view.webContents.getURL().includes('dropdown')).getBounds().height);
             dropdownHeight.should.be.greaterThan(0);
         });
 
         it('MM-T4406_2 should hide the dropdown', async () => {
             await mainWindow.click('.TabBar');
-            const dropdownHeight = await browserWindow.evaluate((window) => window.getBrowserViews().find((view) => view.webContents.getURL().includes('dropdown')).getBounds().height);
+            const dropdownHeight = await browserWindow.evaluate((window) => window.contentView.children.find((view) => view.webContents.getURL().includes('dropdown')).getBounds().height);
             dropdownHeight.should.equal(0);
         });
     });
@@ -74,8 +74,8 @@ describe('menu_bar/dropdown', function desc() {
 
         const mainWindow = this.app.windows().find((window) => window.url().includes('index'));
         const dropdownView = this.app.windows().find((window) => window.url().includes('dropdown'));
-        await mainWindow.click('.TeamDropdownButton');
-        await dropdownView.click('.TeamDropdown__button.addServer');
+        await mainWindow.click('.ServerDropdownButton');
+        await dropdownView.click('.ServerDropdown__button.addServer');
 
         const newServerModal = await this.app.waitForEvent('window', {
             predicate: (window) => window.url().includes('newServer'),
@@ -100,19 +100,19 @@ describe('menu_bar/dropdown', function desc() {
         after(afterFunc);
 
         it('MM-T4408_1 should show the first view', async () => {
-            const firstViewIsAttached = await browserWindow.evaluate((window, url) => Boolean(window.getBrowserViews().find((view) => view.webContents.getURL() === url)), env.exampleURL);
+            const firstViewIsAttached = await browserWindow.evaluate((window, url) => Boolean(window.contentView.children.find((view) => view.webContents.getURL() === url)), env.exampleURL);
             firstViewIsAttached.should.be.true;
-            const secondViewIsAttached = await browserWindow.evaluate((window) => Boolean(window.getBrowserViews().find((view) => view.webContents.getURL() === 'https://github.com/')));
+            const secondViewIsAttached = await browserWindow.evaluate((window) => Boolean(window.contentView.children.find((view) => view.webContents.getURL() === 'https://github.com/')));
             secondViewIsAttached.should.be.false;
         });
 
         it('MM-T4408_2 should show the second view after clicking the menu item', async () => {
-            await mainWindow.click('.TeamDropdownButton');
-            await dropdownView.click('.TeamDropdown button.TeamDropdown__button:nth-child(2)');
+            await mainWindow.click('.ServerDropdownButton');
+            await dropdownView.click('.ServerDropdown button.ServerDropdown__button:nth-child(2)');
 
-            const firstViewIsAttached = await browserWindow.evaluate((window, url) => Boolean(window.getBrowserViews().find((view) => view.webContents.getURL() === url)), env.exampleURL);
+            const firstViewIsAttached = await browserWindow.evaluate((window, url) => Boolean(window.contentView.children.find((view) => view.webContents.getURL() === url)), env.exampleURL);
             firstViewIsAttached.should.be.false;
-            const secondViewIsAttached = await browserWindow.evaluate((window) => Boolean(window.getBrowserViews().find((view) => view.webContents.getURL() === 'https://github.com/')));
+            const secondViewIsAttached = await browserWindow.evaluate((window) => Boolean(window.contentView.children.find((view) => view.webContents.getURL() === 'https://github.com/')));
             secondViewIsAttached.should.be.true;
         });
     });

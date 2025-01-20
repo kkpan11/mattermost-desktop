@@ -13,6 +13,7 @@ describe('LongServerName', function desc() {
     const config = env.demoConfig;
     const longServerName = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vivamus quis malesuada dolor, vel scelerisque sem';
     const longServerUrl = 'https://example.org';
+    let newServerView;
 
     beforeEach(async () => {
         env.createTestUserDataDir();
@@ -24,14 +25,14 @@ describe('LongServerName', function desc() {
         const mainView = this.app.windows().find((window) => window.url().includes('index'));
         const dropdownView = this.app.windows().find((window) => window.url().includes('dropdown'));
 
-        await mainView.click('.TeamDropdownButton');
-        await dropdownView.click('.TeamDropdown .TeamDropdown__button.addServer');
+        await mainView.click('.ServerDropdownButton');
+        await dropdownView.click('.ServerDropdown .ServerDropdown__button.addServer');
         newServerView = await this.app.waitForEvent('window', {
             predicate: (window) => window.url().includes('newServer'),
         });
 
         // wait for autofocus to finish
-        await asyncSleep(500);
+        await asyncSleep(1000);
     });
 
     afterEach(async () => {
@@ -41,26 +42,24 @@ describe('LongServerName', function desc() {
         await env.clearElectronInstances();
     });
 
-    let newServerView;
-
     it('MM-T4050 Long server name', async () => {
-        await newServerView.type('#teamNameInput', longServerName);
-        await newServerView.type('#teamUrlInput', longServerUrl);
+        await newServerView.type('#serverNameInput', longServerName);
+        await newServerView.type('#serverUrlInput', longServerUrl);
         await newServerView.click('#saveNewServerModal');
 
         await asyncSleep(1000);
-        const existing = Boolean(await this.app.windows().find((window) => window.url().includes('newServer')));
+        const existing = Boolean(this.app.windows().find((window) => window.url().includes('newServer')));
         existing.should.be.false;
 
         const mainView = this.app.windows().find((window) => window.url().includes('index'));
         const dropdownView = this.app.windows().find((window) => window.url().includes('dropdown'));
 
-        const isServerTabExists = Boolean(await mainView.locator(`text=${longServerName}`));
-        const isServerAddedDropdown = Boolean(await dropdownView.locator(`text=${longServerName}`));
+        const isServerTabExists = Boolean(mainView.locator(`text=${longServerName}`));
+        const isServerAddedDropdown = Boolean(dropdownView.locator(`text=${longServerName}`));
         isServerTabExists.should.be.true;
         isServerAddedDropdown.should.be.true;
 
-        const serverNameLocator = await mainView.locator(`text=${longServerName}`);
+        const serverNameLocator = mainView.locator(`text=${longServerName}`);
 
         const isTruncated = await serverNameLocator.evaluate((element) => {
             return element.offsetWidth < element.scrollWidth;

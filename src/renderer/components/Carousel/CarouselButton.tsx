@@ -1,8 +1,8 @@
 // Copyright (c) 2016-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import React from 'react';
 import classNames from 'classnames';
+import React from 'react';
 
 import 'renderer/css/components/Button.scss';
 import 'renderer/css/components/CarouselButton.scss';
@@ -15,14 +15,12 @@ export enum ButtonDirection {
 type CarouselButtonProps = {
     direction: ButtonDirection;
     disabled?: boolean;
-    darkMode?: boolean;
     onClick?: () => void;
 };
 
 function CarouselButton({
     direction = ButtonDirection.NEXT,
     disabled = false,
-    darkMode = false,
     onClick = () => null,
 }: CarouselButtonProps) {
     const handleOnClick = () => {
@@ -36,7 +34,6 @@ function CarouselButton({
                 'CarouselButton',
                 'icon-button icon-button-small',
                 {
-                    'icon-button-inverted': darkMode,
                     disabled,
                 },
             )}

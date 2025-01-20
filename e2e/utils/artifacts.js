@@ -4,11 +4,11 @@
 /* eslint-disable no-console,consistent-return */
 
 const fs = require('fs');
-
 const path = require('path');
 
+const {S3} = require('@aws-sdk/client-s3');
+const {Upload} = require('@aws-sdk/lib-storage');
 const async = require('async');
-const AWS = require('aws-sdk');
 const mime = require('mime-types');
 const readdir = require('recursive-readdir');
 
@@ -25,10 +25,11 @@ const {
     BUILD_TAG,
 } = process.env;
 
-const s3 = new AWS.S3({
-    signatureVersion: 'v4',
-    accessKeyId: AWS_ACCESS_KEY_ID,
-    secretAccessKey: AWS_SECRET_ACCESS_KEY,
+const s3 = new S3({
+    credentials: {
+        accessKeyId: AWS_ACCESS_KEY_ID,
+        secretAccessKey: AWS_SECRET_ACCESS_KEY,
+    },
 });
 
 function getFiles(dirPath) {
@@ -51,27 +52,25 @@ async function saveArtifacts() {
             filesToUpload,
             10,
             async.asyncify(async (file) => {
-                const Key = file.replace(uploadPath, s3Folder);
+                const Key = file.replace(uploadPath, s3Folder).replaceAll('\\', '/');
                 const contentType = mime.lookup(file);
                 const charset = mime.charset(contentType);
 
-                return new Promise((res, rej) => {
-                    s3.upload(
-                        {
+                try {
+                    await new Upload({
+                        client: s3,
+                        params: {
                             Key,
                             Bucket: AWS_S3_BUCKET,
                             Body: fs.readFileSync(file),
                             ContentType: `${contentType}${charset ? '; charset=' + charset : ''}`,
                         },
-                        (err) => {
-                            if (err) {
-                                console.log('Failed to upload artifact:', file);
-                                return rej(new Error(err));
-                            }
-                            res({success: true});
-                        },
-                    );
-                });
+                    }).done();
+                    return {success: true};
+                } catch (e) {
+                    console.log('Failed to upload artifact:', file);
+                    throw new Error(e);
+                }
             }),
             (err) => {
                 if (err) {

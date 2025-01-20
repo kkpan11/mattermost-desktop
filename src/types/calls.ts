@@ -3,38 +3,8 @@
 export type CallsWidgetWindowConfig = {
     callID: string;
     title: string;
+    rootID: string;
     channelURL: string;
 }
 
-export type CallsJoinCallMessage = {
-    callID: string;
-    title: string;
-    channelURL: string;
-}
-
-export type CallsWidgetResizeMessage = {
-    element: string;
-    width: number;
-    height: number;
-}
-
-export type CallsWidgetShareScreenMessage = {
-    sourceID: string;
-    withAudio: boolean;
-}
-
-export type CallsJoinedCallMessage = {
-    callID: string;
-}
-
-export type CallsErrorMessage = {
-    err: string;
-    callID?: string;
-    errMsg?: string;
-}
-
-export type CallsLinkClickMessage = {
-    link: string | URL;
-}
-
-export type CallsEventHandler = ((viewName: string, msg: any) => void) | ((viewName: string, opts: Electron.SourcesOptions) => Promise<void>);
+export type CallsJoinCallMessage = CallsWidgetWindowConfig;

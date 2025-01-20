@@ -3,13 +3,16 @@
 import fs from 'fs';
 
 import {Notification, systemPreferences} from 'electron';
-import log, {ElectronLog} from 'electron-log';
-import {DiagnosticStepResponse} from 'types/diagnostics';
+import type {MainLogger} from 'electron-log';
+import log from 'electron-log';
 
-import DiagnosticsStep from '../DiagnosticStep';
 import config from 'common/config';
 
+import type {DiagnosticStepResponse} from 'types/diagnostics';
+
 import {checkPathPermissions} from './internal/utils';
+
+import DiagnosticsStep from '../DiagnosticStep';
 
 const stepName = 'Step-6';
 const stepDescriptiveName = 'PermissionsCheck';
@@ -17,7 +20,7 @@ const stepDescriptiveName = 'PermissionsCheck';
 const isDarwin = process.platform === 'darwin';
 const isWin32 = process.platform === 'win32';
 
-const run = async (logger: ElectronLog): Promise<DiagnosticStepResponse> => {
+const run = async (logger: MainLogger): Promise<DiagnosticStepResponse> => {
     try {
         const downloadsFileAccess = await checkPathPermissions(config.downloadLocation, fs.constants.W_OK);
         const logsFileAccess = await checkPathPermissions(log.transports.file.getFile().path, fs.constants.W_OK);

@@ -1,121 +1,74 @@
 // Copyright (c) 2016-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
+import fs from 'fs';
 import path from 'path';
 
-import fs from 'fs-extra';
+import type {BrowserWindow, Rectangle} from 'electron';
+import {app, Menu, session, dialog, nativeImage, screen} from 'electron';
+import isDev from 'electron-is-dev';
 
-import {app, BrowserWindow, Menu, Rectangle, Session, session, dialog, nativeImage, screen} from 'electron';
-import log, {LevelOption} from 'electron-log';
-
-import {MigrationInfo, TeamWithTabs} from 'types/config';
-import {RemoteInfo} from 'types/server';
-import {Boundaries} from 'types/utils';
-
+import {APP_MENU_WILL_CLOSE, MAIN_WINDOW_CREATED} from 'common/communication';
 import Config from 'common/config';
 import JsonFileManager from 'common/JsonFileManager';
-import {MattermostServer} from 'common/servers/MattermostServer';
-import {TAB_FOCALBOARD, TAB_MESSAGING, TAB_PLAYBOOKS} from 'common/tabs/TabView';
-import urlUtils from 'common/utils/url';
-import Utils from 'common/utils/util';
-import {APP_MENU_WILL_CLOSE} from 'common/communication';
-
+import {Logger} from 'common/log';
+import type {MattermostServer} from 'common/servers/MattermostServer';
+import ServerManager from 'common/servers/serverManager';
+import {isValidURI} from 'common/utils/url';
 import updateManager from 'main/autoUpdater';
 import {migrationInfoPath, updatePaths} from 'main/constants';
 import {localizeMessage} from 'main/i18nManager';
 import {createMenu as createAppMenu} from 'main/menus/app';
 import {createMenu as createTrayMenu} from 'main/menus/tray';
 import {ServerInfo} from 'main/server/serverInfo';
-import {setTrayMenu} from 'main/tray/tray';
-import WindowManager from 'main/windows/windowManager';
+import Tray from 'main/tray/tray';
+import ViewManager from 'main/views/viewManager';
+import MainWindow from 'main/windows/mainWindow';
+
+import type {MigrationInfo} from 'types/config';
+import type {RemoteInfo} from 'types/server';
+import type {Boundaries} from 'types/utils';
 
 import {mainProtocol} from './initialize';
 
 const assetsDir = path.resolve(app.getAppPath(), 'assets');
 const appIconURL = path.resolve(assetsDir, 'appicon_with_spacing_32.png');
 const appIcon = nativeImage.createFromPath(appIconURL);
+const log = new Logger('App.Utils');
 
 export function openDeepLink(deeplinkingUrl: string) {
     try {
-        WindowManager.showMainWindow(deeplinkingUrl);
+        if (MainWindow.get()) {
+            MainWindow.show();
+            ViewManager.handleDeepLink(deeplinkingUrl);
+        } else {
+            MainWindow.on(MAIN_WINDOW_CREATED, () => ViewManager.handleDeepLink(deeplinkingUrl));
+        }
     } catch (err) {
         log.error(`There was an error opening the deeplinking url: ${err}`);
     }
 }
 
 export function updateSpellCheckerLocales() {
-    if (Config.data?.spellCheckerLocales.length && app.isReady()) {
-        session.defaultSession.setSpellCheckerLanguages(Config.data?.spellCheckerLocales);
+    if (Config.spellCheckerLocales.length && app.isReady()) {
+        session.defaultSession.setSpellCheckerLanguages(Config.spellCheckerLocales);
     }
-}
-
-export function updateServerInfos(teams: TeamWithTabs[]) {
-    log.silly('app.utils.updateServerInfos');
-    const serverInfos: Array<Promise<RemoteInfo | string | undefined>> = [];
-    teams.forEach((team) => {
-        const serverInfo = new ServerInfo(new MattermostServer(team.name, team.url));
-        serverInfos.push(serverInfo.promise);
-    });
-    Promise.all(serverInfos).then((data: Array<RemoteInfo | string | undefined>) => {
-        const teams = Config.teams;
-        let hasUpdates = false;
-        teams.forEach((team) => {
-            hasUpdates = hasUpdates || updateServerURL(data, team);
-            hasUpdates = hasUpdates || openExtraTabs(data, team);
-        });
-        if (hasUpdates) {
-            Config.set('teams', teams);
-        }
-    }).catch((reason: any) => {
-        log.error('Error getting server infos', reason);
-    });
-}
-
-function updateServerURL(data: Array<RemoteInfo | string | undefined>, team: TeamWithTabs) {
-    const remoteInfo = data.find((info) => info && typeof info !== 'string' && info.name === team.name) as RemoteInfo;
-    if (remoteInfo && remoteInfo.siteURL && team.url !== remoteInfo.siteURL) {
-        team.url = remoteInfo.siteURL;
-        return true;
-    }
-    return false;
-}
-
-function openExtraTabs(data: Array<RemoteInfo | string | undefined>, team: TeamWithTabs) {
-    let hasUpdates = false;
-    const remoteInfo = data.find((info) => info && typeof info !== 'string' && info.name === team.name) as RemoteInfo;
-    if (remoteInfo) {
-        team.tabs.forEach((tab) => {
-            if (tab.name !== TAB_MESSAGING && remoteInfo.serverVersion && Utils.isVersionGreaterThanOrEqualTo(remoteInfo.serverVersion, '6.0.0')) {
-                if (tab.name === TAB_PLAYBOOKS && remoteInfo.hasPlaybooks && typeof tab.isOpen === 'undefined') {
-                    log.info(`opening ${team.name}___${tab.name} on hasPlaybooks`);
-                    tab.isOpen = true;
-                    hasUpdates = true;
-                }
-                if (tab.name === TAB_FOCALBOARD && remoteInfo.hasFocalboard && typeof tab.isOpen === 'undefined') {
-                    log.info(`opening ${team.name}___${tab.name} on hasFocalboard`);
-                    tab.isOpen = true;
-                    hasUpdates = true;
-                }
-            }
-        });
-    }
-    return hasUpdates;
 }
 
 export function handleUpdateMenuEvent() {
-    log.debug('Utils.handleUpdateMenuEvent');
+    log.debug('handleUpdateMenuEvent');
 
     const aMenu = createAppMenu(Config, updateManager);
     Menu.setApplicationMenu(aMenu);
     aMenu.addListener('menu-will-close', () => {
-        WindowManager.focusBrowserView();
-        WindowManager.sendToRenderer(APP_MENU_WILL_CLOSE);
+        ViewManager.focusCurrentView();
+        MainWindow.sendToRenderer(APP_MENU_WILL_CLOSE);
     });
 
     // set up context menu for tray icon
     if (shouldShowTrayIcon()) {
-        const tMenu = createTrayMenu(Config.data!);
-        setTrayMenu(tMenu);
+        const tMenu = createTrayMenu();
+        Tray.setMenu(tMenu);
     }
 }
 
@@ -123,7 +76,8 @@ export function getDeeplinkingURL(args: string[]) {
     if (Array.isArray(args) && args.length) {
     // deeplink urls should always be the last argument, but may not be the first (i.e. Windows with the app already running)
         const url = args[args.length - 1];
-        if (url && mainProtocol && url.startsWith(mainProtocol) && urlUtils.isValidURI(url)) {
+        const protocol = isDev ? 'mattermost-dev' : mainProtocol;
+        if (url && protocol && url.startsWith(protocol) && isValidURI(url)) {
             return url;
         }
     }
@@ -140,9 +94,13 @@ export function wasUpdated(lastAppVersion?: string) {
 
 export function clearAppCache() {
     // TODO: clear cache on browserviews, not in the renderer.
-    const mainWindow = WindowManager.getMainWindow();
+    const mainWindow = MainWindow.get();
     if (mainWindow) {
-        mainWindow.webContents.session.clearCache().then(mainWindow.reload);
+        mainWindow.webContents.session.clearCache().
+            then(mainWindow.webContents.reload).
+            catch((err) => {
+                log.error('clearAppCache', err);
+            });
     } else {
     //Wait for mainWindow
         setTimeout(clearAppCache, 100);
@@ -190,45 +148,42 @@ function getValidWindowPosition(state: Rectangle) {
     return {x: state.x, y: state.y};
 }
 
-export function resizeScreen(browserWindow: BrowserWindow) {
-    function handle() {
-        log.debug('Utils.resizeScreen.handle');
-        const position = browserWindow.getPosition();
-        const size = browserWindow.getSize();
-        const validPosition = getValidWindowPosition({
-            x: position[0],
-            y: position[1],
-            width: size[0],
-            height: size[1],
-        });
-        if (typeof validPosition.x !== 'undefined' || typeof validPosition.y !== 'undefined') {
-            browserWindow.setPosition(validPosition.x || 0, validPosition.y || 0);
-        } else {
-            browserWindow.center();
-        }
+function getNewWindowPosition(browserWindow: BrowserWindow) {
+    const mainWindow = MainWindow.get();
+    if (!mainWindow) {
+        return browserWindow.getPosition();
     }
 
-    browserWindow.once('restore', handle);
-    handle();
+    const newWindowSize = browserWindow.getSize();
+    const mainWindowSize = mainWindow.getSize();
+    const mainWindowPosition = mainWindow.getPosition();
+
+    return [
+        Math.floor(mainWindowPosition[0] + ((mainWindowSize[0] - newWindowSize[0]) / 2)),
+        Math.floor(mainWindowPosition[1] + ((mainWindowSize[1] - newWindowSize[1]) / 2)),
+    ];
 }
 
-export function flushCookiesStore(session: Session) {
-    log.debug('Utils.flushCookiesStore');
-    session.cookies.flushStore().catch((err) => {
+export function resizeScreen(browserWindow: BrowserWindow) {
+    const position = getNewWindowPosition(browserWindow);
+    const size = browserWindow.getSize();
+    const validPosition = getValidWindowPosition({
+        x: position[0],
+        y: position[1],
+        width: size[0],
+        height: size[1],
+    });
+    if (typeof validPosition.x !== 'undefined' || typeof validPosition.y !== 'undefined') {
+        browserWindow.setPosition(validPosition.x || 0, validPosition.y || 0);
+    } else {
+        browserWindow.center();
+    }
+}
+
+export function flushCookiesStore() {
+    log.debug('flushCookiesStore');
+    session.defaultSession.cookies.flushStore().catch((err) => {
         log.error(`There was a problem flushing cookies:\n${err}`);
-    });
-}
-
-export function initCookieManager(session: Session) {
-    // Somehow cookies are not immediately saved to disk.
-    // So manually flush cookie store to disk on closing the app.
-    // https://github.com/electron/electron/issues/8416
-    app.on('before-quit', () => {
-        flushCookiesStore(session);
-    });
-
-    app.on('browser-window-blur', () => {
-        flushCookiesStore(session);
     });
 }
 
@@ -281,7 +236,7 @@ export function migrateMacAppStore() {
     }
 
     try {
-        fs.copySync(result[0], app.getPath('userData'));
+        fs.cpSync(result[0], app.getPath('userData'), {recursive: true});
         updatePaths(true);
         migrationPrefs.setValue('masConfigs', true);
     } catch (e) {
@@ -289,7 +244,68 @@ export function migrateMacAppStore() {
     }
 }
 
-export function setLoggingLevel(level: LevelOption) {
-    log.transports.console.level = level;
-    log.transports.file.level = level;
+export async function updateServerInfos(servers: MattermostServer[]) {
+    const map: Map<string, RemoteInfo> = new Map();
+    await Promise.all(servers.map((srv) => {
+        const serverInfo = new ServerInfo(srv);
+        return serverInfo.fetchRemoteInfo().
+            then((data) => {
+                map.set(srv.id, data);
+            }).
+            catch((error) => {
+                log.warn('Could not get server info for', srv.name, error);
+            });
+    }));
+    ServerManager.updateRemoteInfos(map);
+}
+
+export async function clearDataForServer(server: MattermostServer) {
+    const mainWindow = MainWindow.get();
+    if (!mainWindow) {
+        return;
+    }
+
+    const response = await dialog.showMessageBox(mainWindow, {
+        type: 'warning',
+        buttons: [
+            localizeMessage('main.app.utils.clearDataForServer.confirm', 'Clear Data'),
+            localizeMessage('main.app.utils.clearDataForServer.cancel', 'Cancel'),
+        ],
+        defaultId: 1,
+        message: localizeMessage('main.app.utils.clearDataForServer.message', 'This action will erase all session, cache, cookie and storage data for the server "{serverName}". Are you sure you want to clear data for this server?', {serverName: server.name}),
+    });
+
+    if (response.response === 0) {
+        await session.defaultSession.clearData({
+            origins: [server.url.origin],
+        });
+        ViewManager.reload();
+    }
+}
+
+export async function clearAllData() {
+    const mainWindow = MainWindow.get();
+    if (!mainWindow) {
+        return;
+    }
+
+    const response = await dialog.showMessageBox(mainWindow, {
+        title: app.name,
+        type: 'warning',
+        buttons: [
+            localizeMessage('main.app.utils.clearAllData.confirm', 'Clear All Data'),
+            localizeMessage('main.app.utils.clearAllData.cancel', 'Cancel'),
+        ],
+        defaultId: 1,
+        message: localizeMessage('main.app.utils.clearAllData.message', 'This action will erase all session, cache, cookie and storage data for all server. Performing this action will restart the application. Are you sure you want to clear all data?'),
+    });
+
+    if (response.response === 0) {
+        await session.defaultSession.clearAuthCache();
+        await session.defaultSession.clearCodeCaches({});
+        await session.defaultSession.clearHostResolverCache();
+        await session.defaultSession.clearData();
+        app.relaunch();
+        app.exit();
+    }
 }

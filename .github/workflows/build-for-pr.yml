@@ -1,11 +1,9 @@
 name: build-for-pr
 
 on:
-  push:
-    # only for build-pr branches
-    # build-pr-*
-    branches:
-      - build-pr-*
+  pull_request:
+    types:
+      - labeled
 
 defaults:
   run:
@@ -16,12 +14,15 @@ env:
 
 jobs:
   build-linux-for-pr:
-    runs-on: ubuntu-latest-4-cores
+    runs-on: ubuntu-22.04
+    if: ${{ github.event.label.name == 'Build Apps for PR' }}
     steps:
       - name: ci/checkout-repo
-        uses: actions/checkout@ac593985615ec2ede58e132d2e21d2b1cbd6127c # v3.3.0
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
       - name: ci/setup-node
-        uses: actions/setup-node@64ed1c7eab4cce3362f8c340dee64e5eaeef8f7c # v3.6.0
+        uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2
         with:
           node-version-file: "package.json"
           cache: "npm"
@@ -30,18 +31,18 @@ jobs:
         env:
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
         run: |
-          wget -qO - https://download.opensuse.org/repositories/Emulators:/Wine:/Debian/xUbuntu_18.04/Release.key | sudo apt-key add -
+          wget -qO - https://download.opensuse.org/repositories/Emulators:/Wine:/Debian/xUbuntu_22.04/Release.key | sudo apt-key add -
           wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/download/v4.20.1/yq_linux_amd64 && chmod a+x /usr/local/bin/yq
           sudo apt-get update || true && sudo apt-get install -y ca-certificates libxtst-dev libpng++-dev gcc-aarch64-linux-gnu g++-aarch64-linux-gnu jq icnsutils graphicsmagick tzdata
           npm ci
       - name: ci/build
         run: |
           mkdir -p ./build/linux
-          npm run package:linux
+          npm run package:linux-tar
           bash -x ./scripts/patch_updater_yml.sh
           bash -x ./scripts/cp_artifacts.sh release ./build/linux
       - name: ci/upload-build
-        uses: actions/upload-artifact@0b7f8abb1508181956e8e162db84b466c27e18ce # v3.1.2
+        uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3 # v4.3.1
         with:
           name: build-linux
           path: ./build/linux
@@ -49,18 +50,21 @@ jobs:
 
   windows-install-deps:
     runs-on: windows-2022
+    if: ${{ github.event.label.name == 'Build Apps for PR' }}
     steps:
       - name: ci/checkout-repo
-        uses: actions/checkout@ac593985615ec2ede58e132d2e21d2b1cbd6127c # v3.3.0
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
       - name: ci/setup-node
-        uses: actions/setup-node@64ed1c7eab4cce3362f8c340dee64e5eaeef8f7c # v3.6.0
+        uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2
         with:
           node-version-file: "package.json"
           cache: "npm"
           cache-dependency-path: package-lock.json
       - name: ci/cache-node-modules
         id: cache-node-modules
-        uses: actions/cache@627f0f41f6904a5b1efbaed9f96d9eb58e92e920 # v3.2.4
+        uses: actions/cache@0c45773b623bea8c8e75f6c82b208c3cf94ea4f9 # v4.0.2
         with:
           path: node_modules
           key: ${{ runner.os }}-build-node-modules-${{ hashFiles('**/package-lock.json') }}
@@ -72,29 +76,27 @@ jobs:
         if: steps.cache-node-modules.outputs.cache-hit != 'true'
         env:
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
-        run: |
-          choco install yq --version 4.15.1 -y
-          npm i -g node-gyp
-          node-gyp install
-          node-gyp install --devdir="C:\Users\runneradmin\.electron-gyp" --target=$(jq -r .devDependencies.electron package.json) --dist-url="https://electronjs.org/headers"
-          npm ci --openssl_fips=''
+        run: npm ci --openssl_fips=''
 
   build-win-for-pr:
     runs-on: windows-2022
+    if: ${{ github.event.label.name == 'Build Apps for PR' }}
     needs:
       - windows-install-deps
     steps:
       - name: ci/checkout-repo
-        uses: actions/checkout@ac593985615ec2ede58e132d2e21d2b1cbd6127c # v3.3.0
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
       - name: ci/setup-node
-        uses: actions/setup-node@64ed1c7eab4cce3362f8c340dee64e5eaeef8f7c # v3.6.0
+        uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2
         with:
           node-version-file: "package.json"
           cache: "npm"
           cache-dependency-path: package-lock.json
       - name: ci/cache-node-modules
         id: cache-node-modules
-        uses: actions/cache@627f0f41f6904a5b1efbaed9f96d9eb58e92e920 # v3.2.4
+        uses: actions/cache@0c45773b623bea8c8e75f6c82b208c3cf94ea4f9 # v4.0.2
         with:
           path: node_modules
           key: ${{ runner.os }}-build-node-modules-${{ hashFiles('package-lock.json') }}
@@ -110,6 +112,7 @@ jobs:
           npm i -g node-gyp
           node-gyp install
           node-gyp install --devdir="C:\Users\runneradmin\.electron-gyp" --target=$(jq -r .devDependencies.electron package.json) --dist-url="https://electronjs.org/headers"
+          node-gyp install --devdir="C:\Users\runneradmin\.electron-gyp" --target=$(jq -r .devDependencies.electron package.json) --dist-url="https://electronjs.org/headers" --arch arm64
       - name: ci/install-dependencies
         if: steps.cache-node-modules.outputs.cache-hit != 'true'
         env:
@@ -119,25 +122,32 @@ jobs:
       - name: ci/build
         env:
           MM_WIN_INSTALLERS: 1
+          PFX_KEY: ${{ secrets.MM_DESKTOP_MSI_INSTALLER_PFX_KEY }}
+          CSC_KEY_PASSWORD: ${{ secrets.MM_DESKTOP_MSI_INSTALLER_CSC_KEY_PASSWORD }}
+          PFX: ${{ secrets.MM_DESKTOP_MSI_INSTALLER_PFX }}
+          CSC_LINK: ${{ secrets.MM_DESKTOP_MSI_INSTALLER_CSC_LINK }}
         run: |
           mkdir -p ./build/win
           npm run package:windows
           bash -x ./scripts/patch_updater_yml.sh
           bash -x ./scripts/cp_artifacts.sh release ./build/win
       - name: ci/upload-build
-        uses: actions/upload-artifact@0b7f8abb1508181956e8e162db84b466c27e18ce # v3.1.2
+        uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3 # v4.3.1
         with:
           name: build-windows
           path: ./build/win
           retention-days: 10 ## No need to keep CI builds more than 10 days
 
   build-mac-for-pr:
-    runs-on: macos-12
+    runs-on: macos-15
+    if: ${{ github.event.label.name == 'Build Apps for PR' }}
     steps:
       - name: ci/checkout-repo
-        uses: actions/checkout@ac593985615ec2ede58e132d2e21d2b1cbd6127c # v3.3.0
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
       - name: ci/setup-node
-        uses: actions/setup-node@64ed1c7eab4cce3362f8c340dee64e5eaeef8f7c # v3.6.0
+        uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2
         with:
           node-version-file: "package.json"
           cache: "npm"
@@ -148,21 +158,27 @@ jobs:
         run: |
           brew install yq
           jq '.mac.target=["zip"]' electron-builder.json | jq '.mac.gatekeeperAssess=false' > /tmp/electron-builder.json && cp /tmp/electron-builder.json .
+          sudo xcode-select -s /Applications/Xcode_16.2.app/Contents/Developer
           npm ci
       - name: ci/build
         env:
-          APPLEID: ${{ secrets.MM_DESKTOP_MAC_INSTALLER_APPLE_ID }}
-          APPLEIDPASS: ${{ secrets.MM_DESKTOP_MAC_INSTALLER_APPLE_ID_PASS }}
+          APPLE_API_KEY_ID: ${{ secrets.MM_DESKTOP_MAC_APP_STORE_MACOS_API_KEY_ID }}
+          APPLE_API_KEY_RAW: ${{ secrets.MM_DESKTOP_MAC_APP_STORE_MACOS_API_KEY }}
+          APPLE_API_KEY: "./key.p8"
+          APPLE_API_ISSUER: ${{ secrets.MM_DESKTOP_MAC_APP_STORE_MACOS_API_ISSUER_ID }}
           CSC_FOR_PULL_REQUEST: true
           CSC_KEY_PASSWORD: ${{ secrets.MM_DESKTOP_MAC_INSTALLER_CSC_KEY_PASSWORD }}
           CSC_LINK: ${{ secrets.MM_DESKTOP_MAC_INSTALLER_CSC_LINK }}
+          MAC_PROFILE: ${{ secrets.MM_DESKTOP_MAC_INSTALLER_DMG_PROFILE }}
         run: |
+          echo $MAC_PROFILE | base64 -D > ./mac.provisionprofile
+          zsh -c 'echo -n $APPLE_API_KEY_RAW > ./key.p8'
           mkdir -p ./build/macos
           npm run package:mac
           bash -x ./scripts/patch_updater_yml.sh
           bash -x ./scripts/cp_artifacts.sh release ./build/macos/
       - name: ci/upload-build
-        uses: actions/upload-artifact@0b7f8abb1508181956e8e162db84b466c27e18ce # v3.1.2
+        uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3 # v4.3.1
         with:
           name: build-macos
           path: ./build/macos/

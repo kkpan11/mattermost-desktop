@@ -1,8 +1,8 @@
 // Copyright (c) 2016-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import React, {useState, useEffect, useRef} from 'react';
 import classNames from 'classnames';
+import React, {useState, useEffect, useRef} from 'react';
 
 import CarouselButton, {ButtonDirection} from './CarouselButton';
 import CarouselPaginationIndicator from './CarouselPaginationIndicator';
@@ -113,7 +113,6 @@ function Carousel({
                 <CarouselButton
                     direction={ButtonDirection.PREV}
                     disabled={disableNavigation}
-                    darkMode={darkMode}
                     onClick={handleOnPrevButtonClick}
                 />
                 <CarouselPaginationIndicator
@@ -126,7 +125,6 @@ function Carousel({
                 <CarouselButton
                     direction={ButtonDirection.NEXT}
                     disabled={disableNavigation}
-                    darkMode={darkMode}
                     onClick={handleOnNextButtonClick}
                 />
             </div>

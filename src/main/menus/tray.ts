@@ -3,20 +3,24 @@
 // See LICENSE.txt for license information.
 'use strict';
 
-import {Menu, MenuItem, MenuItemConstructorOptions} from 'electron';
-import {CombinedConfig} from 'types/config';
+import type {MenuItem, MenuItemConstructorOptions} from 'electron';
+import {Menu} from 'electron';
 
-import WindowManager from 'main/windows/windowManager';
+import ServerViewState from 'app/serverViewState';
+import ServerManager from 'common/servers/serverManager';
 import {localizeMessage} from 'main/i18nManager';
+import {getLocalPreload} from 'main/utils';
+import ModalManager from 'main/views/modalManager';
+import MainWindow from 'main/windows/mainWindow';
 
-export function createTemplate(config: CombinedConfig) {
-    const teams = config.teams;
+export function createTemplate() {
+    const servers = ServerManager.getOrderedServers();
     const template = [
-        ...teams.sort((teamA, teamB) => teamA.order - teamB.order).slice(0, 9).map((team) => {
+        ...servers.slice(0, 9).map((server) => {
             return {
-                label: team.name.length > 50 ? `${team.name.slice(0, 50)}...` : team.name,
+                label: server.name.length > 50 ? `${server.name.slice(0, 50)}...` : server.name,
                 click: () => {
-                    WindowManager.switchServer(team.name);
+                    ServerViewState.switchServer(server.id);
                 },
             };
         }), {
@@ -24,7 +28,18 @@ export function createTemplate(config: CombinedConfig) {
         }, {
             label: process.platform === 'darwin' ? localizeMessage('main.menus.tray.preferences', 'Preferences...') : localizeMessage('main.menus.tray.settings', 'Settings'),
             click: () => {
-                WindowManager.showSettingsWindow();
+                const mainWindow = MainWindow.get();
+                if (!mainWindow) {
+                    return;
+                }
+
+                ModalManager.addModal(
+                    'settingsModal',
+                    'mattermost-desktop://renderer/settings.html',
+                    getLocalPreload('internalAPI.js'),
+                    null,
+                    mainWindow,
+                );
             },
         }, {
             type: 'separator',
@@ -35,7 +50,7 @@ export function createTemplate(config: CombinedConfig) {
     return template;
 }
 
-export function createMenu(config: CombinedConfig) {
+export function createMenu() {
     // Electron is enforcing certain variables that it doesn't need
-    return Menu.buildFromTemplate(createTemplate(config) as Array<MenuItemConstructorOptions | MenuItem>);
+    return Menu.buildFromTemplate(createTemplate() as Array<MenuItemConstructorOptions | MenuItem>);
 }

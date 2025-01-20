@@ -2,7 +2,7 @@
 // See LICENSE.txt for license information.
 // Copyright (c) 2015-2016 Yuya Ochiai
 
-import {Rectangle} from 'electron';
+import type {Rectangle} from 'electron';
 
 import {DEVELOPMENT, PRODUCTION} from './constants';
 
@@ -65,6 +65,10 @@ export const escapeRegex = (s?: string) => {
     }
     return s.replace(/[/\-\\^$*+?.()|[\]{}]/g, '\\$&');
 };
+
+export function copy<T>(data: T) {
+    return Object.assign({}, data);
+}
 
 export default {
     runMode,

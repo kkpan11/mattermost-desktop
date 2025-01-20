@@ -5,6 +5,7 @@
 const fs = require('fs');
 
 const {clipboard} = require('electron');
+const robot = require('robotjs');
 
 const env = require('../../modules/environment');
 const {asyncSleep} = require('../../modules/utils');
@@ -36,15 +37,24 @@ describe('copylink', function desc() {
         await loadingScreen.waitForSelector('.LoadingScreen', {state: 'hidden'});
         const firstServer = this.serverMap[`${config.teams[0].name}___TAB_MESSAGING`].win;
         await env.loginToMattermost(firstServer);
-        await firstServer.waitForSelector('#sidebarItem_suscipit-4');
-        await firstServer.click('#sidebarItem_suscipit-4');
-        await firstServer.click('#sidebarItem_suscipit-4', {button: 'right'});
-        await firstServer.click('text=Copy Linksint >> span');
+        await firstServer.waitForSelector('#sidebarItem_town-square');
+        await firstServer.click('#sidebarItem_town-square', {button: 'right'});
+        switch (process.platform) {
+        case 'linux':
+        case 'win32':
+            robot.keyTap('down');
+            robot.keyTap('down');
+            break;
+        case 'darwin':
+            robot.keyTap('c');
+            break;
+        }
+        robot.keyTap('enter');
         await firstServer.click('#sidebarItem_town-square');
         await firstServer.click('#post_textbox');
         const clipboardText = clipboard.readText();
         await firstServer.fill('#post_textbox', clipboardText);
         const content = await firstServer.locator('#post_textbox').textContent();
-        content.should.contain('/ad-1/channels/suscipit-4');
+        content.should.contain('/ad-1/channels/town-square');
     });
 });
