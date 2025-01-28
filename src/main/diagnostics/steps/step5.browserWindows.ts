@@ -1,27 +1,27 @@
 // Copyright (c) 2016-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import {ElectronLog} from 'electron-log';
+import type {MainLogger} from 'electron-log';
 
-import {DiagnosticStepResponse} from 'types/diagnostics';
+import MainWindow from 'main/windows/mainWindow';
 
-import windowManager from 'main/windows/windowManager';
-
-import DiagnosticsStep from '../DiagnosticStep';
+import type {DiagnosticStepResponse} from 'types/diagnostics';
 
 import {browserWindowVisibilityStatus, webContentsCheck} from './internal/utils';
+
+import DiagnosticsStep from '../DiagnosticStep';
 
 const stepName = 'Step-5';
 const stepDescriptiveName = 'BrowserWindowsChecks';
 
-const run = async (logger: ElectronLog): Promise<DiagnosticStepResponse> => {
+const run = async (logger: MainLogger): Promise<DiagnosticStepResponse> => {
     try {
         /** Main window check */
-        if (!windowManager.mainWindowReady) {
+        if (!MainWindow.isReady) {
             throw new Error('Main window not ready');
         }
-        const mainWindowVisibilityStatus = browserWindowVisibilityStatus('mainWindow', windowManager.mainWindow);
-        const webContentsOk = webContentsCheck(windowManager.mainWindow?.webContents);
+        const mainWindowVisibilityStatus = browserWindowVisibilityStatus('mainWindow', MainWindow.get());
+        const webContentsOk = webContentsCheck(MainWindow.get()?.webContents);
 
         if (mainWindowVisibilityStatus.some((status) => !status.ok) || !webContentsOk) {
             return {

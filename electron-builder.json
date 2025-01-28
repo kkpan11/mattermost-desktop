@@ -15,8 +15,11 @@
     "main": "index.js"
   },
   "files": [
-    "node_modules/bootstrap/dist/**",
-    "node_modules/font-awesome/{css,fonts}/**",
+    "!node_modules/**/*",
+    "node_modules/bindings/**/*",
+    "node_modules/file-uri-to-path/**/*",
+    "node_modules/macos-notification-state/**/*",
+    "node_modules/windows-focus-assist/**/*",
     "!**/node_modules/macos-notification-state/bin/**/*",
     "!**/node_modules/macos-notification-state/build/**/*",
     "!**/node_modules/windows-focus-assist/bin/**/*",
@@ -37,20 +40,17 @@
       ]
     }
   ],
+  "beforePack": "scripts/beforepack.js",
   "afterPack": "scripts/afterpack.js",
-  "afterSign": "scripts/notarize.js",
   "afterAllArtifactBuild": "scripts/afterbuild.js",
   "deb": {
     "artifactName": "${version}/${name}_${version}-1_${arch}.${ext}",
     "synopsis": "Mattermost Desktop App",
     "depends": [
-      "gconf2",
-      "gconf-service",
       "libnotify4",
       "libxtst6",
       "libnss3"
     ],
-    "category": "contrib/net",
     "priority": "optional"
   },
   "asarUnpack": [
@@ -65,7 +65,6 @@
       "appimage",
       "rpm"
     ],
-    "icon": "src/assets/icon.icns",
     "extraFiles": [
       {
         "filter": [
@@ -101,30 +100,31 @@
         ]
       }
     ],
-    "icon": "src/assets/osx/osx_icon.icns",
     "hardenedRuntime": true,
     "gatekeeperAssess": true,
-    "entitlements": "./entitlements.mac.plist",
-    "entitlementsInherit": "./entitlements.mac.plist",
+    "entitlements": "./resources/mac/entitlements.mac.plist",
+    "entitlementsInherit": "./resources/mac/entitlements.mac.inherit.plist",
     "extendInfo": {
       "NSMicrophoneUsageDescription": "Microphone access may be used by Mattermost plugins, such as Jitsi video conferencing.",
       "NSCameraUsageDescription": "Camera access may be used by Mattermost plugins, such as Jitsi video conferencing.",
+      "NSFocusStatusUsageDescription": "Focus status is used by Mattermost to determine whether to send notifications or not.",
       "LSFileQuarantineEnabled": true
-  }
+    }
   },
   "mas": {
     "hardenedRuntime": false,
-    "entitlements": "./entitlements.mas.plist",
-    "entitlementsInherit": "./entitlements.mas.inherit.plist",
-    "entitlementsLoginHelper": "./entitlements.mas.inherit.plist",
+    "entitlements": "./resources/mac/entitlements.mas.plist",
+    "entitlementsInherit": "./resources/mac/entitlements.mas.inherit.plist",
+    "entitlementsLoginHelper": "./resources/mac/entitlements.mas.inherit.plist",
     "provisioningProfile": "./mas.provisionprofile",
     "extendInfo": {
-      "ITSAppUsesNonExemptEncryption": false
+      "ITSAppUsesNonExemptEncryption": false,
+      "NSUserActivityTypes": ["INSendMessageIntent"]
     },
     "singleArchFiles": "*"
   },
   "masDev": {
-    "provisioningProfile": "./mas-dev.provisionprofile"
+    "provisioningProfile": "./dev.provisionprofile"
   },
   "dmg": {
     "background": "src/assets/osx/DMG_BG.png",
@@ -153,7 +153,8 @@
   "win": {
     "target": [
       "nsis",
-      "zip"
+      "zip",
+      "msi"
     ],
     "extraFiles": [
       {
@@ -161,14 +162,26 @@
           "LICENSE.txt",
           "NOTICE.txt"
         ]
+      },
+      {
+        "from": "resources/windows/gpo",
+        "to": "gpo"
       }
     ],
+    "signDlls": true,
     "publisherName": "CN=\"Mattermost, Inc.\", O=\"Mattermost, Inc.\", L=Palo Alto, S=California, C=US"
   },
   "nsis": {
-    "artifactName": "${version}/${name}-setup-${version}-win.${ext}"
+    "artifactName": "${version}/${name}-setup-${version}-win.${ext}",
+    "packElevateHelper": false,
+    "uninstallDisplayName": "${productName}",
+    "include": "scripts/installer.nsh"
+  },
+  "msi": {
+    "additionalWixArgs": ["-ext", "WixUtilExtension"],
+    "upgradeCode": "{8523DAF0-699D-4CC7-9A65-C5E696A9DE6D}"
   },
   "rpm": {
-    "fpm": ["--rpm-rpmbuild-define", "_build_id_links none"]
+    "fpm": ["--rpm-rpmbuild-define", "_build_id_links none", "--rpm-digest=sha256"]
   }
 }

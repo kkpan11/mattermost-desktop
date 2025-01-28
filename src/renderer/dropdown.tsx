@@ -1,33 +1,35 @@
 // Copyright (c) 2016-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
+import classNames from 'classnames';
 import React from 'react';
+import type {DraggingStyle, DropResult, NotDraggingStyle} from 'react-beautiful-dnd';
+import {DragDropContext, Draggable, Droppable} from 'react-beautiful-dnd';
 import ReactDOM from 'react-dom';
 import {FormattedMessage} from 'react-intl';
-import classNames from 'classnames';
-import {DragDropContext, Draggable, DraggingStyle, Droppable, DropResult, NotDraggingStyle} from 'react-beautiful-dnd';
 
-import {Team, TeamWithTabs, TeamWithTabsAndGpo} from 'types/config';
-
-import {getTabViewName} from 'common/tabs/TabView';
 import {TAB_BAR_HEIGHT, THREE_DOT_MENU_WIDTH_MAC} from 'common/utils/constants';
+
+import type {UniqueServer} from 'types/config';
 
 import './css/dropdown.scss';
 
 import IntlProvider from './intl_provider';
 
 type State = {
-    teams?: TeamWithTabsAndGpo[];
-    orderedTeams?: TeamWithTabsAndGpo[];
-    activeTeam?: string;
+    servers?: UniqueServer[];
+    serverOrder?: string[];
+    orderedServers?: UniqueServer[];
+    activeServer?: string;
     darkMode?: boolean;
     enableServerManagement?: boolean;
     unreads?: Map<string, boolean>;
     mentions?: Map<string, number>;
     expired?: Map<string, boolean>;
-    hasGPOTeams?: boolean;
+    hasGPOServers?: boolean;
     isAnyDragging: boolean;
     windowBounds?: Electron.Rectangle;
+    nonce?: string;
 }
 
 function getStyle(style?: DraggingStyle | NotDraggingStyle) {
@@ -40,7 +42,7 @@ function getStyle(style?: DraggingStyle | NotDraggingStyle) {
     }
     return style;
 }
-class TeamDropdown extends React.PureComponent<Record<string, never>, State> {
+class ServerDropdown extends React.PureComponent<Record<string, never>, State> {
     buttonRefs: Map<number, HTMLButtonElement>;
     addServerRef: React.RefObject<HTMLButtonElement>;
     focusedIndex: number | null;
@@ -59,60 +61,62 @@ class TeamDropdown extends React.PureComponent<Record<string, never>, State> {
     }
 
     handleUpdate = (
-        teams: TeamWithTabsAndGpo[],
+        servers: UniqueServer[],
         darkMode: boolean,
         windowBounds: Electron.Rectangle,
-        activeTeam?: string,
+        activeServer?: string,
         enableServerManagement?: boolean,
-        hasGPOTeams?: boolean,
+        hasGPOServers?: boolean,
         expired?: Map<string, boolean>,
         mentions?: Map<string, number>,
         unreads?: Map<string, boolean>,
     ) => {
         this.setState({
-            teams,
-            orderedTeams: teams.concat().sort((a: TeamWithTabs, b: TeamWithTabs) => a.order - b.order),
-            activeTeam,
+            servers,
+            activeServer,
             darkMode,
             enableServerManagement,
-            hasGPOTeams,
+            hasGPOServers,
             unreads,
             mentions,
             expired,
             windowBounds,
         });
-    }
+    };
 
-    selectServer = (team: Team) => {
+    selectServer = (server: UniqueServer) => {
         return () => {
-            window.desktop.serverDropdown.switchServer(team.name);
+            if (!server.id) {
+                return;
+            }
+            window.desktop.serverDropdown.switchServer(server.id);
             this.closeMenu();
         };
-    }
+    };
 
     closeMenu = () => {
         if (!this.state.isAnyDragging) {
             (document.activeElement as HTMLElement).blur();
-            window.desktop.closeTeamsDropdown();
+            window.desktop.closeServersDropdown();
         }
-    }
+    };
 
     preventPropagation = (event: React.MouseEvent<HTMLDivElement>) => {
         event.stopPropagation();
-    }
+    };
 
     addServer = () => {
         window.desktop.serverDropdown.showNewServerModal();
         this.closeMenu();
-    }
+    };
 
-    isActiveTeam = (team: Team) => {
-        return team.name === this.state.activeTeam;
-    }
+    isActiveServer = (server: UniqueServer) => {
+        return server.id === this.state.activeServer;
+    };
 
     onDragStart = () => {
         this.setState({isAnyDragging: true});
-    }
+    };
 
     onDragEnd = (result: DropResult) => {
         const removedIndex = result.source.index;
@@ -121,32 +125,26 @@ class TeamDropdown extends React.PureComponent<Record<string, never>, State> {
             this.setState({isAnyDragging: false});
             return;
         }
-        if (!this.state.teams) {
+        if (!this.state.servers) {
             throw new Error('No config');
         }
-        const teams = this.state.teams.concat();
-        const tabOrder = teams.map((team, index) => {
-            return {
-                index,
-                order: team.order,
-            };
-        }).sort((a, b) => (a.order - b.order));
+        const serversCopy = this.state.servers.concat();
 
-        const team = tabOrder.splice(removedIndex, 1);
-        const newOrder = addedIndex < this.state.teams.length ? addedIndex : this.state.teams.length - 1;
-        tabOrder.splice(newOrder, 0, team[0]);
+        const server = serversCopy.splice(removedIndex, 1);
+        const newOrder = addedIndex < this.state.servers.length ? addedIndex : this.state.servers.length - 1;
+        serversCopy.splice(newOrder, 0, server[0]);
 
-        tabOrder.forEach((t, order) => {
-            teams[t.index].order = order;
-        });
-        this.setState({teams, orderedTeams: teams.concat().sort((a: Team, b: Team) => a.order - b.order), isAnyDragging: false});
-        window.desktop.updateTeams(teams);
-    }
+        this.setState({servers: serversCopy, isAnyDragging: false});
+        window.desktop.updateServerOrder(serversCopy.map((server) => server.id!));
+    };
 
     componentDidMount() {
         window.desktop.serverDropdown.requestInfo();
         window.addEventListener('click', this.closeMenu);
         window.addEventListener('keydown', this.handleKeyboardShortcuts);
+        window.desktop.getNonce().then((nonce) => {
+            this.setState({nonce});
+        });
     }
 
     componentDidUpdate() {
@@ -158,24 +156,24 @@ class TeamDropdown extends React.PureComponent<Record<string, never>, State> {
         window.removeEventListener('keydown', this.handleKeyboardShortcuts);
     }
 
-    setButtonRef = (teamIndex: number, refMethod?: (element: HTMLButtonElement) => unknown) => {
+    setButtonRef = (serverIndex: number, refMethod?: (element: HTMLButtonElement) => unknown) => {
         return (ref: HTMLButtonElement) => {
-            this.addButtonRef(teamIndex, ref);
+            this.addButtonRef(serverIndex, ref);
             refMethod?.(ref);
         };
-    }
+    };
 
-    addButtonRef = (teamIndex: number, ref: HTMLButtonElement | null) => {
+    addButtonRef = (serverIndex: number, ref: HTMLButtonElement | null) => {
         if (ref) {
-            this.buttonRefs.set(teamIndex, ref);
+            this.buttonRefs.set(serverIndex, ref);
             ref.addEventListener('focusin', () => {
-                this.focusedIndex = teamIndex;
+                this.focusedIndex = serverIndex;
             });
             ref.addEventListener('blur', () => {
                 this.focusedIndex = null;
             });
         }
-    }
+    };
 
     handleKeyboardShortcuts = (event: KeyboardEvent) => {
         if (event.key === 'ArrowDown') {
@@ -202,46 +200,47 @@ class TeamDropdown extends React.PureComponent<Record<string, never>, State> {
                 button.focus();
             }
         });
-    }
+    };
 
     handleClickOnDragHandle = (event: React.MouseEvent<HTMLDivElement>) => {
         if (this.state.isAnyDragging) {
             event.stopPropagation();
         }
-    }
+    };
 
-    editServer = (teamName: string) => {
-        if (this.teamIsGpo(teamName)) {
+    editServer = (serverId: string) => {
+        return (event: React.MouseEvent<HTMLButtonElement>) => {
+            event.stopPropagation();
+            window.desktop.serverDropdown.showEditServerModal(serverId);
+            this.closeMenu();
+        };
+    };
+
+    removeServer = (serverId: string) => {
+        if (this.serverIsPredefined(serverId)) {
             return () => {};
         }
         return (event: React.MouseEvent<HTMLButtonElement>) => {
             event.stopPropagation();
-            window.desktop.serverDropdown.showEditServerModal(teamName);
+            window.desktop.serverDropdown.showRemoveServerModal(serverId);
             this.closeMenu();
         };
-    }
+    };
 
-    removeServer = (teamName: string) => {
-        if (this.teamIsGpo(teamName)) {
-            return () => {};
-        }
-        return (event: React.MouseEvent<HTMLButtonElement>) => {
-            event.stopPropagation();
-            window.desktop.serverDropdown.showRemoveServerModal(teamName);
-            this.closeMenu();
-        };
-    }
-
-    teamIsGpo = (teamName: string) => {
-        return this.state.orderedTeams?.some((team) => team.name === teamName && team.isGpo);
-    }
+    serverIsPredefined = (serverId: string) => {
+        return this.state.servers?.some((server) => server.id === serverId && server.isPredefined);
+    };
 
     render() {
+        if (!this.state.nonce) {
+            return null;
+        }
+
         return (
             <IntlProvider>
                 <div
                     onClick={this.preventPropagation}
-                    className={classNames('TeamDropdown', {
+                    className={classNames('ServerDropdown', {
                         darkMode: this.state.darkMode,
                     })}
                     style={{
@@ -249,108 +248,107 @@ class TeamDropdown extends React.PureComponent<Record<string, never>, State> {
                         maxWidth: this.state.windowBounds ? (this.state.windowBounds.width - THREE_DOT_MENU_WIDTH_MAC) : undefined,
                     }}
                 >
-                    <div className='TeamDropdown__header'>
-                        <span className='TeamDropdown__servers'>
+                    <div className='ServerDropdown__header'>
+                        <span className='ServerDropdown__servers'>
                             <FormattedMessage
                                 id='renderer.dropdown.servers'
                                 defaultMessage='Servers'
                             />
                         </span>
-                        <span className='TeamDropdown__keyboardShortcut'>
+                        <span className='ServerDropdown__keyboardShortcut'>
                             {window.process.platform === 'darwin' ? '⌃⌘S' : 'Ctrl + Shift + S'}
                         </span>
                     </div>
-                    <hr className='TeamDropdown__divider'/>
+                    <hr className='ServerDropdown__divider'/>
                     <DragDropContext
+                        nonce={this.state.nonce}
                         onDragStart={this.onDragStart}
                         onDragEnd={this.onDragEnd}
                     >
                         <Droppable
-                            isDropDisabled={this.state.hasGPOTeams}
-                            droppableId='TeamDropdown__droppable'
+                            isDropDisabled={this.state.hasGPOServers}
+                            droppableId='ServerDropdown__droppable'
                         >
                             {(provided) => (
                                 <div
-                                    className='TeamDropdown__droppable'
+                                    className='ServerDropdown__droppable'
                                     ref={provided.innerRef}
                                     {...provided.droppableProps}
                                 >
-                                    {this.state.orderedTeams?.map((team, orderedIndex) => {
-                                        const index = this.state.teams?.indexOf(team);
-                                        const {sessionExpired, hasUnreads, mentionCount} = team.tabs.reduce((counts, tab) => {
-                                            const tabName = getTabViewName(team.name, tab.name);
-                                            counts.sessionExpired = this.state.expired?.get(tabName) || counts.sessionExpired;
-                                            counts.hasUnreads = this.state.unreads?.get(tabName) || counts.hasUnreads;
-                                            counts.mentionCount += this.state.mentions?.get(tabName) || 0;
-                                            return counts;
-                                        }, {sessionExpired: false, hasUnreads: false, mentionCount: 0});
+                                    {this.state.servers?.map((server, orderedIndex) => {
+                                        const index = this.state.servers?.indexOf(server);
+                                        const sessionExpired = this.state.expired?.get(server.id!);
+                                        const hasUnreads = this.state.unreads?.get(server.id!);
+                                        const mentionCount = this.state.mentions?.get(server.id!);
 
                                         let badgeDiv: React.ReactNode;
                                         if (sessionExpired) {
                                             badgeDiv = (
-                                                <div className='TeamDropdown__badge-expired'>
+                                                <div className='ServerDropdown__badge-expired'>
                                                     <i className='icon-alert-circle-outline'/>
                                                 </div>
                                             );
                                         } else if (mentionCount && mentionCount > 0) {
                                             badgeDiv = (
-                                                <div className='TeamDropdown__badge-count'>
+                                                <div className='ServerDropdown__badge-count'>
                                                     <span>{mentionCount > 99 ? '99+' : mentionCount}</span>
                                                 </div>
                                             );
                                         } else if (hasUnreads) {
                                             badgeDiv = (
-                                                <div className='TeamDropdown__badge-dot'/>
+                                                <div className='ServerDropdown__badge-dot'/>
                                             );
                                         }
 
                                         return (
                                             <Draggable
                                                 key={index}
-                                                draggableId={`TeamDropdown__draggable-${index}`}
+                                                draggableId={`ServerDropdown__draggable-${index}`}
                                                 index={orderedIndex}
                                                 disableInteractiveElementBlocking={true}
                                             >
                                                 {(provided, snapshot) => (
                                                     <button
-                                                        className={classNames('TeamDropdown__button', {
+                                                        className={classNames('ServerDropdown__button', {
                                                             dragging: snapshot.isDragging,
                                                             anyDragging: this.state.isAnyDragging,
-                                                            active: this.isActiveTeam(team),
+                                                            active: this.isActiveServer(server),
                                                         })}
                                                         ref={this.setButtonRef(orderedIndex, provided.innerRef)}
                                                         {...provided.draggableProps}
-                                                        onClick={this.selectServer(team)}
+                                                        onClick={this.selectServer(server)}
                                                         style={getStyle(provided.draggableProps.style)}
                                                     >
                                                         <div
-                                                            className={classNames('TeamDropdown__draggable-handle', {
+                                                            className={classNames('ServerDropdown__draggable-handle', {
                                                                 dragging: snapshot.isDragging,
                                                             })}
                                                             {...provided.dragHandleProps}
                                                             onClick={this.handleClickOnDragHandle}
                                                         >
                                                             <i className='icon-drag-vertical'/>
-                                                            {this.isActiveTeam(team) ? <i className='icon-check'/> : <i className='icon-server-variant'/>}
-                                                            <span>{team.name}</span>
+                                                            {this.isActiveServer(server) ? <i className='icon-check'/> : <i className='icon-server-variant'/>}
+                                                            <span>{server.name}</span>
                                                         </div>
-                                                        {!team.isGpo && <div className='TeamDropdown__indicators'>
+                                                        <div className='ServerDropdown__indicators'>
                                                             <button
-                                                                className='TeamDropdown__button-edit'
-                                                                onClick={this.editServer(team.name)}
+                                                                className='ServerDropdown__button-edit'
+                                                                onClick={this.editServer(server.id!)}
                                                             >
                                                                 <i className='icon-pencil-outline'/>
                                                             </button>
-                                                            <button
-                                                                className='TeamDropdown__button-remove'
-                                                                onClick={this.removeServer(team.name)}
-                                                            >
-                                                                <i className='icon-trash-can-outline'/>
-                                                            </button>
-                                                            {badgeDiv && <div className='TeamDropdown__badge'>
+                                                            {!server.isPredefined &&
+                                                                <button
+                                                                    className='ServerDropdown__button-remove'
+                                                                    onClick={this.removeServer(server.id!)}
+                                                                >
+                                                                    <i className='icon-trash-can-outline'/>
+                                                                </button>
+                                                            }
+                                                            {badgeDiv && <div className='ServerDropdown__badge'>
                                                                 {badgeDiv}
                                                             </div>}
-                                                        </div>}
+                                                        </div>
                                                     </button>
                                                 )}
                                             </Draggable>
@@ -361,13 +359,13 @@ class TeamDropdown extends React.PureComponent<Record<string, never>, State> {
                             )}
                         </Droppable>
                     </DragDropContext>
-                    <hr className='TeamDropdown__divider'/>
+                    <hr className='ServerDropdown__divider'/>
                     {this.state.enableServerManagement &&
                         <button
                             ref={(ref) => {
-                                this.addButtonRef(this.state.orderedTeams?.length || 0, ref);
+                                this.addButtonRef(this.state.servers?.length || 0, ref);
                             }}
-                            className='TeamDropdown__button addServer'
+                            className='ServerDropdown__button addServer'
                             onClick={this.addServer}
                         >
                             <i className='icon-plus'/>
@@ -384,6 +382,6 @@ class TeamDropdown extends React.PureComponent<Record<string, never>, State> {
 }
 
 ReactDOM.render(
-    <TeamDropdown/>,
+    <ServerDropdown/>,
     document.getElementById('app'),
 );

@@ -1,29 +1,27 @@
 // Copyright (c) 2016-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import React, {useState, useCallback, useEffect} from 'react';
-import {useIntl, FormattedMessage} from 'react-intl';
 import classNames from 'classnames';
+import React, {useState, useCallback, useEffect, useRef} from 'react';
+import {useIntl, FormattedMessage} from 'react-intl';
 
-import {TeamWithIndex} from 'types/config';
-
-import womanLaptop from 'renderer/assets/svg/womanLaptop.svg';
-
+import {MODAL_TRANSITION_TIMEOUT, URLValidationStatus} from 'common/utils/constants';
 import Header from 'renderer/components/Header';
 import Input, {STATUS, SIZE} from 'renderer/components/Input';
 import LoadingBackground from 'renderer/components/LoadingScreen/LoadingBackground';
 import SaveButton from 'renderer/components/SaveButton/SaveButton';
 
-import {MODAL_TRANSITION_TIMEOUT} from 'common/utils/constants';
-import urlUtils from 'common/utils/url';
+import type {UniqueServer} from 'types/config';
 
 import 'renderer/css/components/Button.scss';
 import 'renderer/css/components/ConfigureServer.scss';
 import 'renderer/css/components/LoadingScreen.css';
 
+import ServerImage from './Images/server';
+
 type ConfigureServerProps = {
-    currentTeams: TeamWithIndex[];
-    team?: TeamWithIndex;
+    server?: UniqueServer;
+    prefillURL?: string;
     mobileView?: boolean;
     darkMode?: boolean;
     messageTitle?: string;
@@ -32,12 +30,12 @@ type ConfigureServerProps = {
     alternateLinkMessage?: string;
     alternateLinkText?: string;
     alternateLinkURL?: string;
-    onConnect: (data: TeamWithIndex) => void;
+    onConnect: (data: UniqueServer) => void;
 };
 
 function ConfigureServer({
-    currentTeams,
-    team,
+    server,
+    prefillURL,
     mobileView,
     darkMode,
     messageTitle,
@@ -53,38 +51,69 @@ function ConfigureServer({
     const {
         name: prevName,
         url: prevURL,
-        order = 0,
-        index = NaN,
-    } = team || {};
+        id,
+    } = server || {};
 
+    const mounted = useRef(false);
     const [transition, setTransition] = useState<'inFromRight' | 'outToLeft'>();
-    const [name, setName] = useState(prevName || '');
-    const [url, setUrl] = useState(prevURL || '');
+    const [name, setName] = useState(prevName ?? '');
+    const [url, setUrl] = useState(prevURL ?? prefillURL ?? '');
     const [nameError, setNameError] = useState('');
-    const [urlError, setURLError] = useState('');
+    const [urlError, setURLError] = useState<{type: STATUS; value: string}>();
     const [showContent, setShowContent] = useState(false);
     const [waiting, setWaiting] = useState(false);
 
-    const canSave = name && url && !nameError && !urlError;
+    const [validating, setValidating] = useState(false);
+    const validationTimestamp = useRef<number>();
+    const validationTimeout = useRef<NodeJS.Timeout>();
+    const editing = useRef(false);
+
+    const canSave = name && url && !nameError && !validating && urlError && urlError.type !== STATUS.ERROR;
 
     useEffect(() => {
         setTransition('inFromRight');
         setShowContent(true);
+        mounted.current = true;
+
+        if (url) {
+            fetchValidationResult(url);
+        }
+
+        return () => {
+            mounted.current = false;
+        };
     }, []);
 
-    const checkProtocolInURL = (checkURL: string): Promise<string> => {
-        if (urlUtils.startsWithProtocol(checkURL)) {
-            return Promise.resolve(checkURL);
-        }
-        return window.desktop.modals.pingDomain(checkURL).then((result: string | Error) => {
-            let newURL = checkURL;
-            if (result instanceof Error) {
-                console.error(`Could not ping url: ${checkURL}`);
-            } else {
-                newURL = `${result}://${checkURL}`;
-                setUrl(newURL);
+    const fetchValidationResult = (urlToValidate: string) => {
+        setValidating(true);
+        setURLError({
+            type: STATUS.INFO,
+            value: formatMessage({id: 'renderer.components.configureServer.url.validating', defaultMessage: 'Validating...'}),
+        });
+        const requestTime = Date.now();
+        validationTimestamp.current = requestTime;
+        validateURL(urlToValidate).then(({validatedURL, serverName, message}) => {
+            if (editing.current) {
+                setValidating(false);
+                setURLError(undefined);
+                return;
             }
-            return newURL;
+            if (!validationTimestamp.current || requestTime < validationTimestamp.current) {
+                return;
+            }
+            if (validatedURL) {
+                setUrl(validatedURL);
+            }
+            if (serverName) {
+                setName((prev) => {
+                    return prev.length ? prev : serverName;
+                });
+            }
+            if (message) {
+                setTransition(undefined);
+                setURLError(message);
+            }
+            setValidating(false);
         });
     };
 
@@ -93,51 +122,78 @@ function ConfigureServer({
 
         if (!newName) {
             return formatMessage({
-                id: 'renderer.components.newTeamModal.error.nameRequired',
+                id: 'renderer.components.newServerModal.error.nameRequired',
                 defaultMessage: 'Name is required.',
-            });
-        }
-
-        if (currentTeams.find(({name: existingName}) => existingName === newName)) {
-            return formatMessage({
-                id: 'renderer.components.newTeamModal.error.serverNameExists',
-                defaultMessage: 'A server with the same name already exists.',
             });
         }
 
         return '';
     };
 
-    const validateURL = async (fullURL: string) => {
-        if (!fullURL) {
-            return formatMessage({
-                id: 'renderer.components.newTeamModal.error.urlRequired',
-                defaultMessage: 'URL is required.',
-            });
+    const validateURL = async (url: string) => {
+        let message;
+        const validationResult = await window.desktop.validateServerURL(url);
+
+        if (validationResult?.status === URLValidationStatus.Missing) {
+            message = {
+                type: STATUS.ERROR,
+                value: formatMessage({
+                    id: 'renderer.components.newServerModal.error.urlRequired',
+                    defaultMessage: 'URL is required.',
+                }),
+            };
         }
 
-        if (!urlUtils.startsWithProtocol(fullURL)) {
-            return formatMessage({
-                id: 'renderer.components.newTeamModal.error.urlNeedsHttp',
-                defaultMessage: 'URL should start with http:// or https://.',
-            });
+        if (validationResult?.status === URLValidationStatus.Invalid) {
+            message = {
+                type: STATUS.ERROR,
+                value: formatMessage({
+                    id: 'renderer.components.newServerModal.error.urlIncorrectFormatting',
+                    defaultMessage: 'URL is not formatted correctly.',
+                }),
+            };
         }
 
-        if (!urlUtils.isValidURL(fullURL)) {
-            return formatMessage({
-                id: 'renderer.components.newTeamModal.error.urlIncorrectFormatting',
-                defaultMessage: 'URL is not formatted correctly.',
-            });
+        if (validationResult?.status === URLValidationStatus.Insecure) {
+            message = {
+                type: STATUS.WARNING,
+                value: formatMessage({id: 'renderer.components.configureServer.url.insecure', defaultMessage: 'Your server URL is potentially insecure. For best results, use a URL with the HTTPS protocol.'}),
+            };
         }
 
-        if (currentTeams.find(({url: existingURL}) => existingURL === fullURL)) {
-            return formatMessage({
-                id: 'renderer.components.newTeamModal.error.serverUrlExists',
-                defaultMessage: 'A server with the same URL already exists.',
-            });
+        if (validationResult?.status === URLValidationStatus.NotMattermost) {
+            message = {
+                type: STATUS.WARNING,
+                value: formatMessage({id: 'renderer.components.configureServer.url.notMattermost', defaultMessage: 'The server URL provided does not appear to point to a valid Mattermost server. Please verify the URL and check your connection.'}),
+            };
         }
 
-        return '';
+        if (validationResult?.status === URLValidationStatus.URLNotMatched) {
+            message = {
+                type: STATUS.WARNING,
+                value: formatMessage({id: 'renderer.components.configureServer.url.urlNotMatched', defaultMessage: 'The server URL provided does not match the configured Site URL on your Mattermost server. Server version: {serverVersion}'}, {serverVersion: validationResult.serverVersion}),
+            };
+        }
+
+        if (validationResult?.status === URLValidationStatus.URLUpdated) {
+            message = {
+                type: STATUS.INFO,
+                value: formatMessage({id: 'renderer.components.configureServer.url.urlUpdated', defaultMessage: 'The server URL provided has been updated to match the configured Site URL on your Mattermost server. Server version: {serverVersion}'}, {serverVersion: validationResult.serverVersion}),
+            };
+        }
+
+        if (validationResult?.status === URLValidationStatus.OK) {
+            message = {
+                type: STATUS.SUCCESS,
+                value: formatMessage({id: 'renderer.components.configureServer.url.ok', defaultMessage: 'Server URL is valid. Server version: {serverVersion}'}, {serverVersion: validationResult.serverVersion}),
+            };
+        }
+
+        return {
+            validatedURL: validationResult.validatedURL,
+            serverName: validationResult.serverName,
+            message,
+        };
     };
 
     const handleNameOnChange = ({target: {value}}: React.ChangeEvent<HTMLInputElement>) => {
@@ -152,8 +208,18 @@ function ConfigureServer({
         setUrl(value);
 
         if (urlError) {
-            setURLError('');
+            setURLError(undefined);
         }
+
+        editing.current = true;
+        clearTimeout(validationTimeout.current as unknown as number);
+        validationTimeout.current = setTimeout(() => {
+            if (!mounted.current) {
+                return;
+            }
+            editing.current = false;
+            fetchValidationResult(value);
+        }, 1000);
     };
 
     const handleOnSaveButtonClick = (e: React.MouseEvent) => {
@@ -184,24 +250,13 @@ function ConfigureServer({
             return;
         }
 
-        const fullURL = await checkProtocolInURL(url.trim());
-        const urlError = await validateURL(fullURL);
-
-        if (urlError) {
-            setTransition(undefined);
-            setURLError(urlError);
-            setWaiting(false);
-            return;
-        }
-
         setTransition('outToLeft');
 
         setTimeout(() => {
             onConnect({
-                url: fullURL,
+                url,
                 name,
-                index,
-                order,
+                id,
             });
         }, MODAL_TRANSITION_TIMEOUT);
     };
@@ -212,14 +267,13 @@ function ConfigureServer({
         }
 
         return (
-            <div className={classNames('alternate-link', transition, {'alternate-link-inverted': darkMode})}>
+            <div className={classNames('alternate-link', transition)}>
                 <span className='alternate-link__message'>
                     {alternateLinkMessage}
                 </span>
                 <a
                     className={classNames(
                         'link-button link-small-button alternate-link__link',
-                        {'link-button-inverted': darkMode},
                     )}
                     href={alternateLinkURL}
                     target='_blank'
@@ -237,7 +291,6 @@ function ConfigureServer({
                 'LoadingScreen',
                 {'LoadingScreen--darkMode': darkMode},
                 'ConfigureServer',
-                {'ConfigureServer-inverted': darkMode},
             )}
         >
             <LoadingBackground/>
@@ -250,6 +303,9 @@ function ConfigureServer({
                     {!mobileView && getAlternateLink()}
                     <div className='ConfigureServer__content'>
                         <div className={classNames('ConfigureServer__message', transition)}>
+                            <div className='ConfigureServer__message-img'>
+                                <ServerImage/>
+                            </div>
                             <h1 className='ConfigureServer__message-title'>
                                 {messageTitle || formatMessage({id: 'renderer.components.configureServer.title', defaultMessage: 'Let’s connect to a server'})}
                             </h1>
@@ -264,14 +320,8 @@ function ConfigureServer({
                                     />)
                                 }
                             </p>
-                            <div className='ConfigureServer__message-img'>
-                                <img
-                                    src={womanLaptop}
-                                    draggable={false}
-                                />
-                            </div>
                         </div>
-                        <div className={classNames('ConfigureServer__card', transition, {'with-error': nameError || urlError})}>
+                        <div className={classNames('ConfigureServer__card', transition, {'with-error': nameError || urlError?.type === STATUS.ERROR})}>
                             <div
                                 className='ConfigureServer__card-content'
                                 onKeyDown={handleOnCardEnterKeyDown}
@@ -288,16 +338,12 @@ function ConfigureServer({
                                         inputSize={SIZE.LARGE}
                                         value={url}
                                         onChange={handleURLOnChange}
-                                        customMessage={urlError ? ({
-                                            type: STATUS.ERROR,
-                                            value: urlError,
-                                        }) : ({
+                                        customMessage={urlError ?? ({
                                             type: STATUS.INFO,
                                             value: formatMessage({id: 'renderer.components.configureServer.url.info', defaultMessage: 'The URL of your Mattermost server'}),
                                         })}
                                         placeholder={formatMessage({id: 'renderer.components.configureServer.url.placeholder', defaultMessage: 'Server URL'})}
                                         disabled={waiting}
-                                        darkMode={darkMode}
                                     />
                                     <Input
                                         name='name'
@@ -316,17 +362,18 @@ function ConfigureServer({
                                         })}
                                         placeholder={formatMessage({id: 'renderer.components.configureServer.name.placeholder', defaultMessage: 'Server display name'})}
                                         disabled={waiting}
-                                        darkMode={darkMode}
                                     />
                                     <SaveButton
                                         id='connectConfigureServer'
                                         extraClasses='ConfigureServer__card-form-button'
                                         saving={waiting}
                                         onClick={handleOnSaveButtonClick}
-                                        defaultMessage={formatMessage({id: 'renderer.components.configureServer.connect.default', defaultMessage: 'Connect'})}
+                                        defaultMessage={urlError?.type === STATUS.WARNING ?
+                                            formatMessage({id: 'renderer.components.configureServer.connect.override', defaultMessage: 'Connect anyway'}) :
+                                            formatMessage({id: 'renderer.components.configureServer.connect.default', defaultMessage: 'Connect'})
+                                        }
                                         savingMessage={formatMessage({id: 'renderer.components.configureServer.connect.saving', defaultMessage: 'Connecting…'})}
                                         disabled={!canSave}
-                                        darkMode={darkMode}
                                     />
                                 </div>
                             </div>

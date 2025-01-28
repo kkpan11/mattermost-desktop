@@ -2,11 +2,13 @@
 // See LICENSE.txt for license information.
 
 import {net, session} from 'electron';
-import log from 'electron-log';
 
 import {COOKIE_NAME_AUTH_TOKEN, COOKIE_NAME_CSRF, COOKIE_NAME_USER_ID} from 'common/constants';
+import {Logger} from 'common/log';
 
-export async function getServerAPI<T>(url: URL, isAuthenticated: boolean, onSuccess?: (data: T) => void, onAbort?: () => void, onError?: (error: Error) => void) {
+const log = new Logger('serverAPI');
+
+export async function getServerAPI(url: URL, isAuthenticated: boolean, onSuccess?: (raw: string) => void, onAbort?: () => void, onError?: (error: Error) => void) {
     if (isAuthenticated) {
         const cookies = await session.defaultSession.cookies.get({});
         if (!cookies) {
@@ -36,17 +38,16 @@ export async function getServerAPI<T>(url: URL, isAuthenticated: boolean, onSucc
 
     if (onSuccess) {
         req.on('response', (response: Electron.IncomingMessage) => {
-            log.silly('getServerAPI.response', response);
+            log.silly('response', response);
             if (response.statusCode === 200) {
                 let raw = '';
                 response.on('data', (chunk: Buffer) => {
-                    log.silly('getServerAPI.response.data', `${chunk}`);
+                    log.silly('response.data', `${chunk}`);
                     raw += `${chunk}`;
                 });
                 response.on('end', () => {
                     try {
-                        const data = JSON.parse(raw) as T;
-                        onSuccess(data);
+                        onSuccess(raw);
                     } catch (e) {
                         const error = `Error parsing server data from ${url.toString()}`;
                         log.error(error);

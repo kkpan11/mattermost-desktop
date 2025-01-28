@@ -2,9 +2,9 @@
 // Copyright (c) 2016-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import {ConfigV3, ConfigV2, ConfigV1, ConfigV0, AnyConfig} from 'types/config';
+import {getDefaultViewsForConfigServer} from 'common/views/View';
 
-import {getDefaultTeamWithTabsFromTeam} from 'common/tabs/TabView';
+import type {ConfigV3, ConfigV2, ConfigV1, ConfigV0, AnyConfig} from 'types/config';
 
 import pastDefaultPreferences from './pastDefaultPreferences';
 
@@ -15,7 +15,7 @@ function deepCopy<T>(object: T): T {
 export function upgradeV0toV1(configV0: ConfigV0) {
     const config = deepCopy(pastDefaultPreferences[1]);
     config.teams.push({
-        name: 'Primary team',
+        name: 'Primary server',
         url: configV0.url,
     });
     return config;
@@ -37,10 +37,7 @@ export function upgradeV2toV3(configV2: ConfigV2) {
     const config: ConfigV3 = Object.assign({}, deepCopy<ConfigV3>(pastDefaultPreferences[3]), configV2);
     config.version = 3;
     config.teams = configV2.teams.map((value) => {
-        return {
-            ...getDefaultTeamWithTabsFromTeam(value),
-            lastActiveTab: 0,
-        };
+        return getDefaultViewsForConfigServer(value);
     });
     config.lastActiveTeam = 0;
     config.spellCheckerLocales = [];

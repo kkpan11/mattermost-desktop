@@ -1,20 +1,18 @@
 // Copyright (c) 2016-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
+import classNames from 'classnames';
 import React, {useState, useEffect, useMemo} from 'react';
 import {useIntl, FormattedMessage} from 'react-intl';
-import classNames from 'classnames';
-
-import bullseye from 'renderer/assets/svg/bullseye.svg';
-import channels from 'renderer/assets/svg/channels.svg';
-import chat2 from 'renderer/assets/svg/chat2.svg';
-import clipboard from 'renderer/assets/svg/clipboard.svg';
-
-import Carousel from 'renderer/components/Carousel';
-import Header from 'renderer/components/Header';
-import LoadingBackground from 'renderer/components/LoadingScreen/LoadingBackground';
 
 import {MODAL_TRANSITION_TIMEOUT} from 'common/utils/constants';
+import Carousel from 'renderer/components/Carousel';
+import Header from 'renderer/components/Header';
+import CallsImage from 'renderer/components/Images/calls';
+import CollaborateImage from 'renderer/components/Images/collaborate';
+import ThreadsEmptyImage from 'renderer/components/Images/threads-empty';
+import ToolsImage from 'renderer/components/Images/tools';
+import LoadingBackground from 'renderer/components/LoadingScreen/LoadingBackground';
 
 import WelcomeScreenSlide from './WelcomeScreenSlide';
 
@@ -46,64 +44,52 @@ function WelcomeScreen({
             title: formatMessage({id: 'renderer.components.welcomeScreen.slides.welcome.title', defaultMessage: 'Welcome'}),
             subtitle: formatMessage({
                 id: 'renderer.components.welcomeScreen.slides.welcome.subtitle',
-                defaultMessage: 'Mattermost is an open source platform for developer collaboration. Secure, flexible, and integrated with the tools you love.',
+                defaultMessage: 'Mattermost is an open source collaboration platform for mission-critical work. Secure, flexible, and integrated with the tools you love.',
             }),
             image: (
-                <img
-                    src={chat2}
-                    draggable={false}
-                />
+                <ThreadsEmptyImage/>
             ),
             main: true,
         },
         {
-            key: 'channels',
-            title: formatMessage({id: 'renderer.components.welcomeScreen.slides.channels.title', defaultMessage: 'Channels'}),
+            key: 'Collaborate in real-time',
+            title: formatMessage({id: 'renderer.components.welcomeScreen.slides.collaborate.title', defaultMessage: 'Collaborate in real-time'}),
             subtitle: (
                 <FormattedMessage
-                    id='renderer.components.welcomeScreen.slides.channels.subtitle'
-                    defaultMessage='All of your team’s communication in one place.<br></br>Secure collaboration, built for developers.'
+                    id='renderer.components.welcomeScreen.slides.collaborate.subtitle'
+                    defaultMessage='Collaborate effectively with persistent channels, file and code snippet sharing, and workflow automation purpose-built for technical teams.'
                     values={{
                         br: (x: React.ReactNode) => (<><br/>{x}</>),
                     }}
                 />
             ),
             image: (
-                <img
-                    src={channels}
-                    draggable={false}
-                />
+                <CollaborateImage/>
             ),
         },
         {
-            key: 'playbooks',
-            title: formatMessage({id: 'renderer.components.welcomeScreen.slides.playbooks.title', defaultMessage: 'Playbooks'}),
+            key: 'calls',
+            title: formatMessage({id: 'renderer.components.welcomeScreen.slides.calls.title', defaultMessage: 'Start secure calls instantly'}),
             subtitle: formatMessage({
-                id: 'renderer.components.welcomeScreen.slides.palybooks.subtitle',
-                defaultMessage: 'Move faster and make fewer mistakes with checklists, automations, and tool integrations that power your team’s workflows.',
+                id: 'renderer.components.welcomeScreen.slides.calls.subtitle',
+                defaultMessage: 'When typing isn’t fast enough, seamlessly move from chat to audio calls and screenshare without switching tools.',
             }),
             image: (
-                <img
-                    src={clipboard}
-                    draggable={false}
-                />
+                <CallsImage/>
             ),
         },
         {
-            key: 'boards',
-            title: formatMessage({id: 'renderer.components.welcomeScreen.slides.boards.title', defaultMessage: 'Boards'}),
+            key: 'integrate',
+            title: formatMessage({id: 'renderer.components.welcomeScreen.slides.integrate.title', defaultMessage: 'Integrate with tools you love'}),
             subtitle: formatMessage({
-                id: 'renderer.components.welcomeScreen.slides.boards.subtitle',
-                defaultMessage: 'Ship on time, every time, with a project and task management solution built for digital operations.',
+                id: 'renderer.components.welcomeScreen.slides.integrate.subtitle',
+                defaultMessage: 'Execute and automate workflows with flexible, custom integrations with popular technical tools like GitHub, GitLab, and ServiceNow.',
             }),
             image: (
-                <img
-                    src={bullseye}
-                    draggable={false}
-                />
+                <ToolsImage/>
             ),
         },
-    ], []);
+    ], [formatMessage]);
 
     const handleOnGetStartedClick = () => {
         setTransition('outToLeft');
@@ -147,7 +133,6 @@ function WelcomeScreen({
                             className={classNames(
                                 'WelcomeScreen__button',
                                 'primary-button primary-medium-button',
-                                {'primary-button-inverted': darkMode},
                             )}
                             onClick={handleOnGetStartedClick}
                         >

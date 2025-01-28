@@ -1,23 +1,21 @@
 // Copyright (c) 2016-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
+import classNames from 'classnames';
 import React from 'react';
-import {DownloadedItem} from 'types/downloads';
-
 import {FormattedMessage, useIntl} from 'react-intl';
 
-import {Button} from 'react-bootstrap';
+import type {DownloadedItem} from 'types/downloads';
 
-import classNames from 'classnames';
-
-import Thumbnail from '../Thumbnail';
 import FileSizeAndStatus from '../FileSizeAndStatus';
+import Thumbnail from '../Thumbnail';
 
 type OwnProps = {
     item: DownloadedItem;
+    appName: string;
 }
 
-const UpdateAvailable = ({item}: OwnProps) => {
+const UpdateAvailable = ({item, appName}: OwnProps) => {
     const translate = useIntl();
 
     const onButtonClick = (e: React.MouseEvent<HTMLButtonElement>) => {
@@ -31,7 +29,7 @@ const UpdateAvailable = ({item}: OwnProps) => {
                 <Thumbnail item={item}/>
                 <div className='DownloadsDropdown__File__Body__Details'>
                     <div className='DownloadsDropdown__File__Body__Details__Filename'>
-                        {translate.formatMessage({id: 'renderer.downloadsDropdown.Update.MattermostVersionX', defaultMessage: `Mattermost version ${item.filename}`}, {version: item.filename})}
+                        {translate.formatMessage({id: 'renderer.downloadsDropdown.Update.MattermostVersionX', defaultMessage: `{appName} version ${item.filename}`}, {version: item.filename, appName})}
                     </div>
                     <div
                         className={classNames('DownloadsDropdown__File__Body__Details__FileSizeAndStatus', {
@@ -40,7 +38,7 @@ const UpdateAvailable = ({item}: OwnProps) => {
                     >
                         <FileSizeAndStatus item={item}/>
                     </div>
-                    <Button
+                    <button
                         id='restartAndUpdateButton'
                         className='primary-button'
                         onClick={onButtonClick}
@@ -49,7 +47,7 @@ const UpdateAvailable = ({item}: OwnProps) => {
                             id='renderer.downloadsDropdown.Update.RestartAndUpdate'
                             defaultMessage={'Restart & update'}
                         />
-                    </Button>
+                    </button>
                 </div>
             </div>
         </div>

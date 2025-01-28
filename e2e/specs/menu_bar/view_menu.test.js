@@ -11,7 +11,7 @@ const {asyncSleep} = require('../../modules/utils');
 
 async function setupPromise(window, id) {
     const promise = new Promise((resolve) => {
-        const browserView = window.getBrowserViews().find((view) => view.webContents.id === id);
+        const browserView = window.contentView.children.find((view) => view.webContents.id === id);
         browserView.webContents.on('did-finish-load', () => {
             resolve();
         });
@@ -22,13 +22,13 @@ async function setupPromise(window, id) {
 
 function getZoomFactorOfServer(browserWindow, serverId) {
     return browserWindow.evaluate(
-        (window, id) => window.getBrowserViews().find((view) => view.webContents.id === id).webContents.getZoomFactor(),
+        (window, id) => window.contentView.children.find((view) => view.webContents.id === id).webContents.getZoomFactor(),
         serverId,
     );
 }
 function setZoomFactorOfServer(browserWindow, serverId, zoomFactor) {
     return browserWindow.evaluate(
-        (window, {id, zoom}) => window.getBrowserViews().find((view) => view.webContents.id === id).webContents.setZoomFactor(zoom),
+        (window, {id, zoom}) => window.contentView.children.find((view) => view.webContents.id === id).webContents.setZoomFactor(zoom),
         {id: serverId, zoom: zoomFactor},
     );
 }
@@ -82,12 +82,12 @@ describe('menu/view', function desc() {
 
         robot.keyTap('=', [env.cmdOrCtrl]);
         await asyncSleep(1000);
-        let zoomLevel = await browserWindow.evaluate((window, id) => window.getBrowserViews().find((view) => view.webContents.id === id).webContents.getZoomFactor(), firstServerId);
+        let zoomLevel = await browserWindow.evaluate((window, id) => window.contentView.children.find((view) => view.webContents.id === id).webContents.getZoomFactor(), firstServerId);
         zoomLevel.should.be.greaterThan(1);
 
         robot.keyTap('0', [env.cmdOrCtrl]);
         await asyncSleep(1000);
-        zoomLevel = await browserWindow.evaluate((window, id) => window.getBrowserViews().find((view) => view.webContents.id === id).webContents.getZoomFactor(), firstServerId);
+        zoomLevel = await browserWindow.evaluate((window, id) => window.contentView.children.find((view) => view.webContents.id === id).webContents.getZoomFactor(), firstServerId);
         zoomLevel.should.be.equal(1);
     });
 
@@ -104,7 +104,7 @@ describe('menu/view', function desc() {
 
             robot.keyTap('=', [env.cmdOrCtrl]);
             await asyncSleep(1000);
-            const zoomLevel = await browserWindow.evaluate((window, id) => window.getBrowserViews().find((view) => view.webContents.id === id).webContents.getZoomFactor(), firstServerId);
+            const zoomLevel = await browserWindow.evaluate((window, id) => window.contentView.children.find((view) => view.webContents.id === id).webContents.getZoomFactor(), firstServerId);
             zoomLevel.should.be.greaterThan(1);
         });
 
@@ -144,7 +144,7 @@ describe('menu/view', function desc() {
 
             robot.keyTap('-', [env.cmdOrCtrl]);
             await asyncSleep(1000);
-            const zoomLevel = await browserWindow.evaluate((window, id) => window.getBrowserViews().find((view) => view.webContents.id === id).webContents.getZoomFactor(), firstServerId);
+            const zoomLevel = await browserWindow.evaluate((window, id) => window.contentView.children.find((view) => view.webContents.id === id).webContents.getZoomFactor(), firstServerId);
             zoomLevel.should.be.lessThan(1);
         });
 
@@ -212,46 +212,22 @@ describe('menu/view', function desc() {
         });
         isDevToolsOpen.should.be.false;
 
-        robot.keyTap('alt');
-        robot.keyTap('enter');
-        robot.keyTap('v');
-        robot.keyTap('d');
-        robot.keyTap('enter');
-        await asyncSleep(1000);
+        if (process.platform === 'darwin') {
+        // Press Command + Option + I
+            robot.keyTap('i', ['command', 'alt']);
+            await asyncSleep(3000);
+        }
 
+        if (process.platform === 'win32') {
+            robot.keyToggle('shift', 'down');
+            robot.keyToggle('control', 'down');
+            robot.keyTap('i');
+        }
+
+        await asyncSleep(1000);
         isDevToolsOpen = await browserWindow.evaluate((window) => {
             return window.webContents.isDevToolsOpened();
         });
         isDevToolsOpen.should.be.true;
     });
-
-    // TODO: Missing shortcut for macOS
-    if (process.platform !== 'darwin') {
-        it('MM-T821 should open Developer Tools For Current Server for the active tab', async () => {
-            const mainWindow = this.app.windows().find((window) => window.url().includes('index'));
-            const browserWindow = await this.app.browserWindow(mainWindow);
-            const webContentsId = this.serverMap[`${config.teams[0].name}___TAB_MESSAGING`].webContentsId;
-            const loadingScreen = this.app.windows().find((window) => window.url().includes('loadingScreen'));
-            await loadingScreen.waitForSelector('.LoadingScreen', {state: 'hidden'});
-
-            let isDevToolsOpen = await browserWindow.evaluate((window, id) => {
-                return window.getBrowserViews().find((view) => view.webContents.id === id).webContents.isDevToolsOpened();
-            }, webContentsId);
-            isDevToolsOpen.should.be.false;
-
-            // Open Developer Tools for Current Server
-            robot.keyTap('alt');
-            robot.keyTap('enter');
-            robot.keyTap('v');
-            robot.keyTap('d');
-            robot.keyTap('d');
-            robot.keyTap('enter');
-            await asyncSleep(1000);
-
-            isDevToolsOpen = await browserWindow.evaluate((window, id) => {
-                return window.getBrowserViews().find((view) => view.webContents.id === id).webContents.isDevToolsOpened();
-            }, webContentsId);
-            isDevToolsOpen.should.be.true;
-        });
-    }
 });

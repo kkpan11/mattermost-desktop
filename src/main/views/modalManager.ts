@@ -1,12 +1,9 @@
 // Copyright (c) 2016-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import {BrowserWindow, ipcMain} from 'electron';
-import {IpcMainEvent, IpcMainInvokeEvent} from 'electron/main';
-
-import log from 'electron-log';
-
-import {CombinedConfig} from 'types/config';
+import type {BrowserWindow} from 'electron';
+import {ipcMain} from 'electron';
+import type {IpcMainEvent, IpcMainInvokeEvent} from 'electron/main';
 
 import {
     RETRIEVE_MODAL_INFO,
@@ -17,15 +14,20 @@ import {
     EMIT_CONFIGURATION,
     DARK_MODE_CHANGE,
     GET_MODAL_UNCLOSEABLE,
-    RESIZE_MODAL,
+    MAIN_WINDOW_RESIZED,
+    RELOAD_CONFIGURATION,
 } from 'common/communication';
-import Config from 'common/config';
-
+import {Logger} from 'common/log';
 import {getAdjustedWindowBoundaries} from 'main/utils';
+import ViewManager from 'main/views/viewManager';
 import WebContentsEventManager from 'main/views/webContentEvents';
-import WindowManager from 'main/windows/windowManager';
+import MainWindow from 'main/windows/mainWindow';
+
+import type {CombinedConfig} from 'types/config';
 
 import {ModalView} from './modalView';
+
+const log = new Logger('ModalManager');
 
 export class ModalManager {
     modalQueue: Array<ModalView<any, any>>;
@@ -39,7 +41,7 @@ export class ModalManager {
         ipcMain.handle(RETRIEVE_MODAL_INFO, this.handleInfoRequest);
         ipcMain.on(MODAL_RESULT, this.handleModalResult);
         ipcMain.on(MODAL_CANCEL, this.handleModalCancel);
-        ipcMain.on(RESIZE_MODAL, this.handleResizeModal);
+        MainWindow.on(MAIN_WINDOW_RESIZED, this.handleResizeModal);
 
         ipcMain.on(EMIT_CONFIGURATION, this.handleEmitConfiguration);
     }
@@ -61,7 +63,19 @@ export class ModalManager {
             return modalPromise;
         }
         return this.modalPromises.get(key) as Promise<T2>;
-    }
+    };
+
+    removeModal = (key: string) => {
+        const modalView = this.modalQueue.find((modal) => modal.key === key);
+        if (!modalView) {
+            return;
+        }
+
+        modalView.hide();
+        modalView.resolve(null);
+        this.modalPromises.delete(key);
+        this.filterActive();
+    };
 
     findModalByCaller = (event: IpcMainInvokeEvent) => {
         if (this.modalQueue.length) {
@@ -71,34 +85,34 @@ export class ModalManager {
             return requestModal;
         }
         return null;
-    }
+    };
 
     handleInfoRequest = (event: IpcMainInvokeEvent) => {
-        log.debug('ModalManager.handleInfoRequest');
+        log.debug('handleInfoRequest');
 
         const requestModal = this.findModalByCaller(event);
         if (requestModal) {
             return requestModal.handleInfoRequest();
         }
         return null;
-    }
+    };
 
     showModal = () => {
         const withDevTools = process.env.MM_DEBUG_MODALS || false;
         this.modalQueue.forEach((modal, index) => {
             if (index === 0) {
-                WindowManager.sendToRenderer(MODAL_OPEN);
+                MainWindow.sendToRenderer(MODAL_OPEN);
                 modal.show(undefined, Boolean(withDevTools));
-                WebContentsEventManager.addWebContentsEventListeners(modal.view.webContents, () => Config.teams.concat());
+                WebContentsEventManager.addWebContentsEventListeners(modal.view.webContents);
             } else {
-                WindowManager.sendToRenderer(MODAL_CLOSE);
+                MainWindow.sendToRenderer(MODAL_CLOSE);
                 modal.hide();
             }
         });
-    }
+    };
 
     handleModalFinished = (mode: 'resolve' | 'reject', event: IpcMainEvent, data: unknown) => {
-        log.debug('ModalManager.handleModalFinished', {mode, data});
+        log.debug('handleModalFinished', {mode, data});
 
         const requestModal = this.findModalByCaller(event);
         if (requestModal) {
@@ -113,10 +127,10 @@ export class ModalManager {
         if (this.modalQueue.length) {
             this.showModal();
         } else {
-            WindowManager.sendToRenderer(MODAL_CLOSE);
-            WindowManager.focusBrowserView();
+            MainWindow.sendToRenderer(MODAL_CLOSE);
+            ViewManager.focusCurrentView();
         }
-    }
+    };
 
     handleModalResult = (event: IpcMainEvent, data: unknown) => this.handleModalFinished('resolve', event, data);
 
@@ -124,41 +138,42 @@ export class ModalManager {
 
     filterActive = () => {
         this.modalQueue = this.modalQueue.filter((modal) => modal.isActive());
-    }
+    };
 
     isModalDisplayed = () => {
         return this.modalQueue.some((modal) => modal.isActive());
-    }
+    };
 
-    handleResizeModal = (event: IpcMainEvent, bounds: Electron.Rectangle) => {
-        log.debug('ModalManager.handleResizeModal', {bounds, modalQueueLength: this.modalQueue.length});
+    handleResizeModal = (bounds: Electron.Rectangle) => {
+        log.debug('handleResizeModal', {bounds, modalQueueLength: this.modalQueue.length});
 
         if (this.modalQueue.length) {
             const currentModal = this.modalQueue[0];
             currentModal.view.setBounds(getAdjustedWindowBoundaries(bounds.width, bounds.height));
         }
-    }
+    };
 
     focusCurrentModal = () => {
         if (this.isModalDisplayed()) {
             this.modalQueue[0].view.webContents.focus();
         }
-    }
+    };
 
     handleEmitConfiguration = (event: IpcMainEvent, config: CombinedConfig) => {
         if (this.modalQueue.length) {
-            log.debug('ModalManager.handleEmitConfiguration');
+            log.debug('handleEmitConfiguration');
         }
 
         this.modalQueue.forEach((modal) => {
+            modal.view.webContents.send(RELOAD_CONFIGURATION);
             modal.view.webContents.send(DARK_MODE_CHANGE, config.darkMode);
         });
-    }
+    };
 
     handleGetModalUncloseable = (event: IpcMainInvokeEvent) => {
         const modalView = this.modalQueue.find((modal) => modal.view.webContents.id === event.sender.id);
         return modalView?.uncloseable;
-    }
+    };
 }
 
 const modalManager = new ModalManager();

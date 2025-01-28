@@ -1,8 +1,11 @@
 // Copyright (c) 2016-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import {BrowserView, BrowserWindow} from 'electron';
-import log from 'electron-log';
+import type {BrowserWindow} from 'electron';
+import {WebContentsView} from 'electron';
+
+import {Logger} from 'common/log';
+import performanceMonitor from 'main/performanceMonitor';
 
 import ContextMenu from '../contextMenu';
 import {getWindowBoundaries} from '../utils';
@@ -17,7 +20,7 @@ export class ModalView<T, T2> {
     key: string;
     html: string;
     data: T;
-    view: BrowserView;
+    view: WebContentsView;
     onReject: (value: T2) => void;
     onResolve: (value: T2) => void;
     window: BrowserWindow;
@@ -25,20 +28,16 @@ export class ModalView<T, T2> {
     status: Status;
     contextMenu: ContextMenu;
     uncloseable: boolean;
+    private log: Logger;
 
     constructor(key: string, html: string, preload: string, data: T, onResolve: (value: T2) => void, onReject: (value: T2) => void, currentWindow: BrowserWindow, uncloseable: boolean) {
         this.key = key;
         this.html = html;
         this.data = data;
-        log.info(`preloading with ${preload}`);
-        this.view = new BrowserView({webPreferences: {
-            preload,
-
-            // Workaround for this issue: https://github.com/electron/electron/issues/30993
-            // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-            // @ts-ignore
-            transparent: true,
-        }});
+        this.log = new Logger('ModalView', key);
+        this.log.info(`preloading with ${preload}`);
+        this.view = new WebContentsView({webPreferences: {preload}});
+        this.view.setBackgroundColor('#00000000');
         this.onReject = onReject;
         this.onResolve = onResolve;
         this.window = currentWindow;
@@ -46,10 +45,11 @@ export class ModalView<T, T2> {
 
         this.status = Status.ACTIVE;
         try {
+            performanceMonitor.registerView(`Modal-${key}`, this.view.webContents);
             this.view.webContents.loadURL(this.html);
         } catch (e) {
-            log.error('there was an error loading the modal:');
-            log.error(e);
+            this.log.error('there was an error loading the modal:');
+            this.log.error(e);
         }
 
         this.contextMenu = new ContextMenu({}, this.view);
@@ -58,15 +58,17 @@ export class ModalView<T, T2> {
     show = (win?: BrowserWindow, withDevTools?: boolean) => {
         if (this.windowAttached) {
         // we'll reatach
-            this.windowAttached.removeBrowserView(this.view);
+            this.windowAttached.contentView.removeChildView(this.view);
         }
         this.windowAttached = win || this.window;
 
-        this.windowAttached.addBrowserView(this.view);
+        this.windowAttached.contentView.addChildView(this.view);
 
         // Linux sometimes doesn't have the bound initialized correctly initially, so we wait to set them
         const setBoundsFunction = () => {
-            this.view.setBounds(getWindowBoundaries(this.windowAttached!));
+            if (this.windowAttached) {
+                this.view.setBounds(getWindowBoundaries(this.windowAttached));
+            }
         };
         if (process.platform === 'linux') {
             setTimeout(setBoundsFunction, 10);
@@ -84,32 +86,28 @@ export class ModalView<T, T2> {
         }
 
         if (withDevTools) {
-            log.info(`showing dev tools for ${this.key}`);
+            this.log.info(`showing dev tools for ${this.key}`);
             this.view.webContents.openDevTools({mode: 'detach'});
         }
-    }
+    };
 
     hide = () => {
         if (this.windowAttached) {
             if (this.view.webContents.isDevToolsOpened()) {
                 this.view.webContents.closeDevTools();
             }
-            this.windowAttached.removeBrowserView(this.view);
-
-            // workaround to eliminate zombie processes
-            // https://github.com/mattermost/desktop/pull/1519
-            // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-            // @ts-ignore
-            this.view.webContents.destroy();
+            performanceMonitor.unregisterView(this.view.webContents.id);
+            this.windowAttached.contentView.removeChildView(this.view);
+            this.view.webContents.close();
 
             delete this.windowAttached;
             this.status = Status.ACTIVE;
         }
-    }
+    };
 
     handleInfoRequest = () => {
         return this.data;
-    }
+    };
 
     reject = (data: T2) => {
         if (this.onReject) {
@@ -117,7 +115,7 @@ export class ModalView<T, T2> {
         }
         this.hide();
         this.status = Status.DONE;
-    }
+    };
 
     resolve = (data: T2) => {
         if (this.onResolve) {
@@ -125,7 +123,7 @@ export class ModalView<T, T2> {
         }
         this.hide();
         this.status = Status.DONE;
-    }
+    };
 
     isActive = () => this.status !== Status.DONE;
 }

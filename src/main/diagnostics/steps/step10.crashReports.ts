@@ -4,15 +4,16 @@ import fs from 'fs';
 import path from 'path';
 
 import {app} from 'electron';
-import {ElectronLog} from 'electron-log';
-import {DiagnosticStepResponse} from 'types/diagnostics';
+import type {MainLogger} from 'electron-log';
+
+import type {DiagnosticStepResponse} from 'types/diagnostics';
 
 import DiagnosticsStep from '../DiagnosticStep';
 
 const stepName = 'Step-10';
 const stepDescriptiveName = 'CrashReports';
 
-const run = async (logger: ElectronLog): Promise<DiagnosticStepResponse> => {
+const run = async (logger: MainLogger): Promise<DiagnosticStepResponse> => {
     try {
         const pathOfCrashReports = app.getPath('userData');
         const allDirFiles = await fs.promises.readdir(pathOfCrashReports);

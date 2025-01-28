@@ -2,11 +2,12 @@
 // See LICENSE.txt for license information.
 
 import {ipcMain} from 'electron';
-import log from 'electron-log';
 
 import {GET_AVAILABLE_LANGUAGES, GET_LANGUAGE_INFORMATION} from 'common/communication';
+import {Logger} from 'common/log';
 
-import {Language, languages} from '../../i18n/i18n';
+import type {Language} from '../../i18n/i18n';
+import {languages} from '../../i18n/i18n';
 
 export function localizeMessage(s: string, defaultString = '', values: any = {}) {
     let str = i18nManager.currentLanguage.url[s] || defaultString;
@@ -15,6 +16,8 @@ export function localizeMessage(s: string, defaultString = '', values: any = {})
     }
     return str;
 }
+
+const log = new Logger('i18nManager');
 
 export class I18nManager {
     currentLanguage: Language;
@@ -27,7 +30,7 @@ export class I18nManager {
     }
 
     setLocale = (locale: string) => {
-        log.debug('i18nManager.setLocale', locale);
+        log.debug('setLocale', locale);
 
         if (this.isLanguageAvailable(locale)) {
             this.currentLanguage = this.getLanguages()[locale];
@@ -37,23 +40,23 @@ export class I18nManager {
 
         log.warn('Failed to set new language', locale);
         return false;
-    }
+    };
 
     getLanguages = () => {
         return languages;
-    }
+    };
 
     getAvailableLanguages = () => {
         return Object.keys(languages);
-    }
+    };
 
     isLanguageAvailable = (locale: string) => {
         return Boolean(this.getLanguages()[locale]);
-    }
+    };
 
     getCurrentLanguage = () => {
         return this.currentLanguage;
-    }
+    };
 }
 
 const i18nManager = new I18nManager();
