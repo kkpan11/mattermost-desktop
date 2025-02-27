@@ -4,13 +4,8 @@
 import path from 'path';
 
 import {dialog, ipcMain, app, nativeImage} from 'electron';
-import log from 'electron-log';
-
-import {autoUpdater, CancellationToken, ProgressInfo, UpdateInfo} from 'electron-updater';
-
-import downloadsManager from 'main/downloadsManager';
-import {localizeMessage} from 'main/i18nManager';
-import {displayUpgrade, displayRestartToUpgrade} from 'main/notifications';
+import type {ProgressInfo, UpdateInfo} from 'electron-updater';
+import {autoUpdater, CancellationToken} from 'electron-updater';
 
 import {
     CANCEL_UPGRADE,
@@ -24,11 +19,15 @@ import {
     UPDATE_REMIND_LATER,
 } from 'common/communication';
 import Config from 'common/config';
+import {Logger} from 'common/log';
+import downloadsManager from 'main/downloadsManager';
+import {localizeMessage} from 'main/i18nManager';
+import NotificationManager from 'main/notifications';
 
 const NEXT_NOTIFY = 86400000; // 24 hours
 const NEXT_CHECK = 3600000; // 1 hour
 
-log.transports.file.level = 'info';
+const log = new Logger('UpdateManager');
 autoUpdater.logger = log;
 autoUpdater.autoDownload = false;
 autoUpdater.disableWebInstaller = true;
@@ -64,14 +63,14 @@ export class UpdateManager {
         this.cancellationToken = new CancellationToken();
 
         autoUpdater.on('error', (err: Error) => {
-            log.error(`[Mattermost] There was an error while trying to update: ${err}`);
+            log.error('There was an error while trying to update', err);
         });
 
         autoUpdater.on('update-available', (info: UpdateInfo) => {
             autoUpdater.removeListener('update-not-available', this.displayNoUpgrade);
             this.versionAvailable = info.version;
             ipcMain.emit(UPDATE_SHORTCUT_MENU);
-            log.info(`[Mattermost] available version ${info.version}`);
+            log.info('New version available:', info.version);
             this.notify();
         });
 
@@ -79,7 +78,7 @@ export class UpdateManager {
             this.versionDownloaded = info.version;
             this.downloadedInfo = info;
             ipcMain.emit(UPDATE_SHORTCUT_MENU);
-            log.info(`[Mattermost] downloaded version ${info.version}`);
+            log.info('Downloaded version', info.version);
             this.notifyDownloaded();
         });
 
@@ -88,7 +87,7 @@ export class UpdateManager {
         });
 
         ipcMain.on(CANCEL_UPGRADE, () => {
-            log.info('[Mattermost] User Canceled upgrade');
+            log.info('User Canceled upgrade');
         });
 
         ipcMain.on(CHECK_FOR_UPDATES, () => {
@@ -109,44 +108,44 @@ export class UpdateManager {
         } else if (this.versionAvailable) {
             this.notifyUpgrade();
         }
-    }
+    };
 
     notifyUpgrade = (): void => {
         ipcMain.emit(UPDATE_AVAILABLE, null, this.versionAvailable);
-        displayUpgrade(this.versionAvailable || 'unknown', this.handleDownload);
-    }
+        NotificationManager.displayUpgrade(this.versionAvailable || 'unknown', this.handleDownload);
+    };
 
     notifyDownloaded = (): void => {
         ipcMain.emit(UPDATE_DOWNLOADED, null, this.downloadedInfo);
-        displayRestartToUpgrade(this.versionDownloaded || 'unknown', this.handleUpdate);
-    }
+        NotificationManager.displayRestartToUpgrade(this.versionDownloaded || 'unknown', this.handleUpdate);
+    };
 
     handleDownload = (): void => {
         if (this.lastCheck) {
             clearTimeout(this.lastCheck);
         }
         autoUpdater.downloadUpdate(this.cancellationToken);
-    }
+    };
 
     handleCancelDownload = (): void => {
         this.cancellationToken?.cancel();
         this.cancellationToken = new CancellationToken();
-    }
+    };
 
     handleRemindLater = (): void => {
         // TODO
-    }
+    };
 
     handleOnQuit = (): void => {
         if (this.versionDownloaded) {
             autoUpdater.quitAndInstall(true, false);
         }
-    }
+    };
 
     handleUpdate = (): void => {
         downloadsManager.removeUpdateBeforeRestart();
         autoUpdater.quitAndInstall();
-    }
+    };
 
     displayNoUpgrade = (): void => {
         const version = app.getVersion();
@@ -159,7 +158,7 @@ export class UpdateManager {
             buttons: [localizeMessage('label.ok', 'OK')],
             detail: localizeMessage('main.autoUpdater.noUpdate.detail', 'You are using the latest version of the {appName} Desktop App (version {version}). You\'ll be notified when a new version is available to install.', {appName: app.name, version}),
         });
-    }
+    };
 
     checkForUpdates = (manually: boolean): void => {
         if (!Config.canUpgrade) {
@@ -179,11 +178,11 @@ export class UpdateManager {
                 }
             }).catch((reason) => {
                 ipcMain.emit(NO_UPDATE_AVAILABLE);
-                log.error(`[Mattermost] Failed to check for updates: ${reason}`);
+                log.error('Failed to check for updates:', reason);
             });
             this.lastCheck = setTimeout(() => this.checkForUpdates(false), NEXT_CHECK);
         }
-    }
+    };
 }
 
 const updateManager = new UpdateManager();

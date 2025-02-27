@@ -1,18 +1,14 @@
 // Copyright (c) 2016-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import 'bootstrap/dist/css/bootstrap.min.css';
-import 'renderer/css/modals.css';
-
 import React, {useEffect, useState} from 'react';
 import ReactDOM from 'react-dom';
 
-import {TeamWithIndex} from 'types/config';
-
 import IntlProvider from 'renderer/intl_provider';
 
-import NewTeamModal from '../../components/NewTeamModal'; //'./addServer.jsx';
+import type {UniqueServer} from 'types/config';
 
+import NewServerModal from '../../components/NewServerModal';
 import setupDarkMode from '../darkMode';
 
 setupDarkMode();
@@ -21,31 +17,34 @@ const onClose = () => {
     window.desktop.modals.cancelModal();
 };
 
-const onSave = (data: TeamWithIndex) => {
+const onSave = (data: UniqueServer) => {
     window.desktop.modals.finishModal(data);
 };
 
 const NewServerModalWrapper: React.FC = () => {
+    const [data, setData] = useState<{prefillURL?: string}>();
     const [unremoveable, setUnremovable] = useState<boolean>();
-    const [currentTeams, setCurrentTeams] = useState<TeamWithIndex[]>();
 
     useEffect(() => {
         window.desktop.modals.isModalUncloseable().then((uncloseable) => {
             setUnremovable(uncloseable);
         });
-        window.desktop.modals.getModalInfo<TeamWithIndex[]>().then((teams) => {
-            setCurrentTeams(teams);
-        });
+
+        window.desktop.modals.getModalInfo<{prefillURL?: string}>().
+            then((data) => {
+                setData(data);
+            });
     }, []);
 
     return (
         <IntlProvider>
-            <NewTeamModal
-                onClose={unremoveable ? undefined : onClose}
+            <NewServerModal
+                unremoveable={unremoveable}
+                onClose={onClose}
                 onSave={onSave}
                 editMode={false}
+                prefillURL={data?.prefillURL}
                 show={true}
-                currentTeams={currentTeams}
             />
         </IntlProvider>
     );

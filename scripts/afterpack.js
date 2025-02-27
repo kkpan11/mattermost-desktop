@@ -1,21 +1,20 @@
 // Copyright (c) 2016-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
+const {spawnSync} = require('child_process');
 const path = require('path');
 
-const {spawn} = require('electron-notarize/lib/spawn.js');
+const {flipFuses, FuseVersion, FuseV1Options} = require('@electron/fuses');
 
 const SETUID_PERMISSIONS = '4755';
-
-const {flipFuses, FuseVersion, FuseV1Options} = require('@electron/fuses');
 
 function fixSetuid(context) {
     return async (target) => {
         if (!['appimage', 'snap'].includes(target.name.toLowerCase())) {
-            const result = await spawn('chmod', [SETUID_PERMISSIONS, path.join(context.appOutDir, 'chrome-sandbox')]);
-            if (result.code !== 0) {
+            const result = await spawnSync('chmod', [SETUID_PERMISSIONS, path.join(context.appOutDir, 'chrome-sandbox')]);
+            if (result.error) {
                 throw new Error(
-                    `Failed to set proper permissions for linux arch on ${target.name}`,
+                    `Failed to set proper permissions for linux arch on ${target.name}: ${result.error} ${result.stderr} ${result.stdout}`,
                 );
             }
         }
@@ -43,6 +42,13 @@ exports.default = async function afterPack(context) {
             {
                 version: FuseVersion.V1,
                 [FuseV1Options.RunAsNode]: false, // Disables ELECTRON_RUN_AS_NODE
+                [FuseV1Options.EnableNodeCliInspectArguments]: false, // Disables --inspect
+                [FuseV1Options.GrantFileProtocolExtraPrivileges]: false,
+                [FuseV1Options.EnableCookieEncryption]: true,
+                [FuseV1Options.EnableNodeOptionsEnvironmentVariable]: false, // Disables NODE_OPTIONS and NODE_EXTRA_CA_CERTS
+                // Can only verify on macOS right now, electron-builder doesn't support Windows ASAR integrity verification
+                [FuseV1Options.EnableEmbeddedAsarIntegrityValidation]: context.electronPlatformName === 'darwin' || context.electronPlatformName === 'mas',
+                [FuseV1Options.OnlyLoadAppFromAsar]: true,
             });
 
         if (context.electronPlatformName === 'linux') {

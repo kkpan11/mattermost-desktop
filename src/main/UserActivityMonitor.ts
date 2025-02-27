@@ -1,10 +1,12 @@
 // Copyright (c) 2016-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
+import {app, powerMonitor} from 'electron';
 import {EventEmitter} from 'events';
 
-import {app, powerMonitor} from 'electron';
-import log from 'electron-log';
+import {Logger} from 'common/log';
+
+const log = new Logger('UserActivityMonitor');
 
 /**
  * Monitors system idle time, listens for system events and fires status updates as needed
@@ -80,6 +82,7 @@ export class UserActivityMonitor extends EventEmitter {
    */
     stopMonitoring() {
         clearInterval(this.systemIdleTimeIntervalID);
+        this.systemIdleTimeIntervalID = -1;
     }
 
     /**

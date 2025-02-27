@@ -4,14 +4,12 @@
 
 import {ipcMain} from 'electron';
 
-import {AppState} from 'types/appState';
-
 import {UPDATE_PATHS} from 'common/communication';
 import JsonFileManager from 'common/JsonFileManager';
-
+import * as Validator from 'common/Validator';
 import {appVersionJson} from 'main/constants';
 
-import * as Validator from './Validator';
+import type {AppState} from 'types/appState';
 
 export class AppVersionManager extends JsonFileManager<AppState> {
     constructor(file: string) {
@@ -25,7 +23,7 @@ export class AppVersionManager extends JsonFileManager<AppState> {
         if (!validatedJSON) {
             this.setJson({});
         }
-    }
+    };
 
     set lastAppVersion(version) {
         this.setValue('lastAppVersion', version);

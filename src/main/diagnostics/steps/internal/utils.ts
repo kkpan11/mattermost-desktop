@@ -4,11 +4,13 @@ import fs from 'fs';
 import https from 'https';
 import readline from 'readline';
 
-import {BrowserWindow, Rectangle, WebContents} from 'electron';
-import log, {ElectronLog, LogLevel} from 'electron-log';
-import {AddDurationToFnReturnObject, LogFileLineData, LogLevelAmounts, WindowStatus} from 'types/diagnostics';
+import type {BrowserWindow, Rectangle, WebContents} from 'electron';
+import type {MainLogger, LogLevel} from 'electron-log';
+import log from 'electron-log';
 
 import {IS_ONLINE_ENDPOINT, LOGS_MAX_STRING_LENGTH, REGEX_LOG_FILE_LINE} from 'common/constants';
+
+import type {AddDurationToFnReturnObject, LogFileLineData, LogLevelAmounts, WindowStatus} from 'types/diagnostics';
 
 export function dateTimeInFilename(date?: Date) {
     const now = date ?? new Date();
@@ -58,7 +60,7 @@ export function truncateString(str: string, maxLength = LOGS_MAX_STRING_LENGTH):
     return str;
 }
 
-export async function isOnline(logger: ElectronLog = log, url = IS_ONLINE_ENDPOINT): Promise<boolean> {
+export async function isOnline(logger: MainLogger = log, url = IS_ONLINE_ENDPOINT): Promise<boolean> {
     return new Promise<boolean>((resolve) => {
         https.get(url, (resp) => {
             let data = '';
@@ -70,11 +72,17 @@ export async function isOnline(logger: ElectronLog = log, url = IS_ONLINE_ENDPOI
 
             // The whole response has been received. Print out the result.
             resp.on('end', () => {
-                logger.debug('resp.on.end', {data});
-                const respBody = JSON.parse(data);
-                if (respBody.status === 'OK') {
-                    resolve(true);
-                    return;
+                logger.debug('resp.on.end', {data, url});
+                if (data.length) {
+                    try {
+                        const respBody = JSON.parse(data);
+                        if (respBody.status === 'OK') {
+                            resolve(true);
+                            return;
+                        }
+                    } catch (e) {
+                        logger.error('Cannot parse response');
+                    }
                 }
                 resolve(false);
             });
@@ -101,7 +109,7 @@ export function browserWindowVisibilityStatus(name: string, bWindow?: BrowserWin
     const destroyed = bWindow.isDestroyed();
     const visible = bWindow.isVisible();
     const enabled = bWindow.isEnabled();
-    const browserViewsBounds = bWindow.getBrowserViews()?.map((view) => view.getBounds());
+    const webContentsViewsBounds = bWindow.contentView.children.map((view) => view.getBounds());
 
     status.push({
         name: 'windowExists',
@@ -133,9 +141,9 @@ export function browserWindowVisibilityStatus(name: string, bWindow?: BrowserWin
         ok: enabled,
     });
     status.push({
-        name: 'browserViewsBounds',
-        ok: browserViewsBounds.every((bounds) => boundsOk(bounds)),
-        data: browserViewsBounds,
+        name: 'webContentsViewsBounds',
+        ok: webContentsViewsBounds.every((bounds) => boundsOk(bounds)),
+        data: webContentsViewsBounds,
     });
 
     return status;

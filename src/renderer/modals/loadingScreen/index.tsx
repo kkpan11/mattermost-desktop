@@ -6,8 +6,6 @@ import ReactDOM from 'react-dom';
 
 import LoadingScreen from '../../components/LoadingScreen';
 
-import 'bootstrap/dist/css/bootstrap.min.css';
-import 'renderer/css/modals.css';
 import 'renderer/css/components/LoadingAnimation.css';
 import 'renderer/css/components/LoadingScreen.css';
 
@@ -35,22 +33,22 @@ class LoadingScreenRoot extends React.PureComponent<Props, State> {
         window.desktop.loadingScreen.onToggleLoadingScreenVisibility(this.onToggleLoadingScreenVisibility);
 
         window.addEventListener('click', () => {
-            window.desktop.closeTeamsDropdown();
+            window.desktop.closeServersDropdown();
             window.desktop.closeDownloadsDropdown();
         });
     }
 
     setDarkMode = (darkMode: boolean) => {
         this.setState({darkMode});
-    }
+    };
 
     onToggleLoadingScreenVisibility = (showLoadingScreen: boolean) => {
         this.setState({showLoadingScreen});
-    }
+    };
 
     onFadeOutComplete = () => {
         window.desktop.loadingScreen.loadingScreenAnimationFinished();
-    }
+    };
 
     render() {
         return (

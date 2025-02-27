@@ -1,4 +1,5 @@
-**/*_bundle.js
-node_modules/
-release/
-src/node_modules/
+node_modules
+dist
+api-types/lib
+e2e/mochawesome-report
+e2e/dist
