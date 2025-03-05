@@ -4,26 +4,24 @@
 import React, {useEffect, useState} from 'react';
 import ReactDOM from 'react-dom';
 
-import {TeamWithIndex} from 'types/config';
-
 import IntlProvider from 'renderer/intl_provider';
 
-import WelcomeScreen from '../../components/WelcomeScreen';
-import ConfigureServer from '../../components/ConfigureServer';
+import type {UniqueServer} from 'types/config';
 
-import 'bootstrap/dist/css/bootstrap.min.css';
+import ConfigureServer from '../../components/ConfigureServer';
+import WelcomeScreen from '../../components/WelcomeScreen';
 
 const MOBILE_SCREEN_WIDTH = 1200;
 
-const onConnect = (data: TeamWithIndex) => {
+const onConnect = (data: UniqueServer) => {
     window.desktop.modals.finishModal(data);
 };
 
 const WelcomeScreenModalWrapper = () => {
+    const [data, setData] = useState<{prefillURL?: string}>();
     const [darkMode, setDarkMode] = useState(false);
     const [getStarted, setGetStarted] = useState(false);
     const [mobileView, setMobileView] = useState(false);
-    const [currentTeams, setCurrentTeams] = useState<TeamWithIndex[]>([]);
 
     const handleWindowResize = () => {
         setMobileView(window.innerWidth < MOBILE_SCREEN_WIDTH);
@@ -38,9 +36,13 @@ const WelcomeScreenModalWrapper = () => {
             setDarkMode(result);
         });
 
-        window.desktop.modals.getModalInfo<TeamWithIndex[]>().then((result) => {
-            setCurrentTeams(result);
-        });
+        window.desktop.modals.getModalInfo<{prefillURL?: string}>().
+            then((data) => {
+                setData(data);
+                if (data.prefillURL) {
+                    setGetStarted(true);
+                }
+            });
 
         handleWindowResize();
         window.addEventListener('resize', handleWindowResize);
@@ -60,8 +62,8 @@ const WelcomeScreenModalWrapper = () => {
                 <ConfigureServer
                     mobileView={mobileView}
                     darkMode={darkMode}
-                    currentTeams={currentTeams}
                     onConnect={onConnect}
+                    prefillURL={data?.prefillURL}
                 />
             ) : (
                 <WelcomeScreen

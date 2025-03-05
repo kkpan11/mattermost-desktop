@@ -2,18 +2,19 @@
 // Copyright (c) 2016-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import {BrowserView, BrowserWindow, ContextMenuParams, Event} from 'electron';
-import electronContextMenu, {Options} from 'electron-context-menu';
+import type {BrowserWindow, BrowserView, WebviewTag, WebContents, ContextMenuParams, Event} from 'electron';
+import type {Options} from 'electron-context-menu';
+import electronContextMenu from 'electron-context-menu';
 
-import urlUtils from 'common/utils/url';
+import {parseURL} from 'common/utils/url';
 
 const defaultMenuOptions = {
     shouldShowMenu: (e: Event, p: ContextMenuParams) => {
         const isInternalLink = p.linkURL.endsWith('#') && p.linkURL.slice(0, -1) === p.pageURL;
         let isInternalSrc;
         try {
-            const srcurl = urlUtils.parseURL(p.srcURL);
-            isInternalSrc = srcurl?.protocol === 'file:';
+            const srcurl = parseURL(p.srcURL);
+            isInternalSrc = srcurl?.protocol === 'mattermost-desktop:';
         } catch (err) {
             isInternalSrc = false;
         }
@@ -28,11 +29,11 @@ const defaultMenuOptions = {
 };
 
 export default class ContextMenu {
-    view: BrowserWindow | BrowserView;
+    view: BrowserWindow | BrowserView | WebviewTag | WebContents;
     menuOptions: Options;
     menuDispose?: () => void;
 
-    constructor(options: Options, view: BrowserWindow | BrowserView) {
+    constructor(options: Options, view: BrowserWindow | WebContents) {
         const providedOptions: Options = options || {};
 
         this.menuOptions = Object.assign({}, defaultMenuOptions, providedOptions);
@@ -46,12 +47,12 @@ export default class ContextMenu {
             this.menuDispose();
             delete this.menuDispose;
         }
-    }
+    };
 
     reload = () => {
         this.dispose();
 
         const options = {window: this.view, ...this.menuOptions};
         this.menuDispose = electronContextMenu(options);
-    }
+    };
 }

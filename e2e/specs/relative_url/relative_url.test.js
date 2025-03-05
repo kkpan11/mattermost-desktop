@@ -32,12 +32,9 @@ describe('copylink', function desc() {
     });
 
     it('MM-T1308 Check that external links dont open in the app', async () => {
-        const loadingScreen = this.app.windows().find((window) => window.url().includes('loadingScreen'));
-        await loadingScreen.waitForSelector('.LoadingScreen', {state: 'hidden'});
         const firstServer = this.serverMap[`${config.teams[0].name}___TAB_MESSAGING`].win;
         await env.loginToMattermost(firstServer);
-        await firstServer.waitForSelector('#sidebarItem_suscipit-4');
-        await firstServer.click('#sidebarItem_suscipit-4');
+        await firstServer.waitForSelector('#post_textbox');
         await firstServer.click('#post_textbox');
         await firstServer.fill('#post_textbox', 'https://electronjs.org/apps/mattermost');
         await firstServer.press('#post_textbox', 'Enter');

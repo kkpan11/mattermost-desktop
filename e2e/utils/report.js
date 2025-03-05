@@ -8,9 +8,10 @@ const os = require('os');
 const axios = require('axios');
 const fse = require('fs-extra');
 
-const package = require('../../package.json');
-
 const {MOCHAWESOME_REPORT_DIR} = require('./constants');
+
+const package = require('../../package.json');
+const e2ePackage = require('../package.json');
 
 const MAX_FAILED_TITLES = 5;
 
@@ -76,6 +77,7 @@ function generateShortSummary(report) {
     return {
         stats,
         statsFieldValue,
+        failedFullTitles,
     };
 }
 
@@ -116,11 +118,11 @@ function getOS() {
 
 function getEnvironmentValues() {
     return {
-        playwright_version: package.devDependencies.playwright,
-        electron_version: package.devDependencies.electron,
-        os_name: getOS(),
-        os_version: os.release(),
-        node_version: process.version,
+        playwrightVersion: e2ePackage.dependencies.playwright,
+        electronVersion: package.devDependencies.electron,
+        osName: getOS(),
+        osVersion: os.release(),
+        nodeVersion: process.version,
     };
 }
 
@@ -138,11 +140,11 @@ function generateTestReport(summary, isUploadedToS3, reportLink, testCycleKey) {
     } = process.env;
     const {statsFieldValue, stats} = summary;
     const {
-        playwright_version,
-        electron_version,
-        os_name,
-        os_version,
-        node_version,
+        playwrightVersion,
+        electronVersion,
+        osName,
+        osVersion,
+        nodeVersion,
     } = getEnvironmentValues();
 
     let testResult;
@@ -154,7 +156,7 @@ function generateTestReport(summary, isUploadedToS3, reportLink, testCycleKey) {
     }
 
     const title = generateTitle();
-    const envValue = `playwright@${playwright_version} | node@${node_version} | electron@${electron_version} | ${os_name}@${os_version}`;
+    const envValue = `playwright@${playwrightVersion} | node@${nodeVersion} | electron@${electronVersion} | ${osName}@${osVersion}`;
 
     if (FULL_REPORT === 'true') {
         let reportField;
@@ -229,8 +231,10 @@ function generateTestReport(summary, isUploadedToS3, reportLink, testCycleKey) {
 function generateTitle() {
     const {
         BRANCH,
+        DESKTOP_VERSION,
         PULL_REQUEST,
         RELEASE_VERSION,
+        SERVER_VERSION,
         TYPE,
     } = process.env;
 
@@ -250,6 +254,15 @@ function generateTitle() {
         break;
     case 'NIGHTLY':
         title = 'E2E for Master Nightly Build';
+        break;
+    case 'MASTER':
+        title = 'E2E for Post Merge to Master';
+        break;
+    case 'MANUAL':
+        title = `E2E for Manually triggered for ${BRANCH}`;
+        break;
+    case 'CMT':
+        title = `Compatibility Matrix Testing Report for Server v${SERVER_VERSION} and Desktop version v${DESKTOP_VERSION}`;
         break;
     default:
         title = 'E2E for Build$';

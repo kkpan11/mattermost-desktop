@@ -6,15 +6,16 @@
 import fs from 'fs';
 
 import {ipcMain} from 'electron';
-import log from 'electron-log';
-
-import {TrustedOrigin, PermissionType} from 'types/trustedOrigin';
 
 import {UPDATE_PATHS} from 'common/communication';
-import urlUtils from 'common/utils/url';
+import {Logger} from 'common/log';
+import * as Validator from 'common/Validator';
 
-import * as Validator from './Validator';
+import type {TrustedOrigin, PermissionType} from 'types/trustedOrigin';
+
 import {trustedOriginsStoreFile} from './constants';
+
+const log = new Logger('TrustedOriginsStore');
 
 export class TrustedOriginsStore {
     storeFile: string;
@@ -33,7 +34,7 @@ export class TrustedOriginsStore {
             storeData = null;
         }
         return storeData;
-    }
+    };
 
     load = () => {
         const storeData = this.readFromFile();
@@ -45,7 +46,7 @@ export class TrustedOriginsStore {
             }
         }
         this.data = new Map(Object.entries(result));
-    }
+    };
 
     // don't use this, is for ease of mocking it on testing
     saveToFile(stringMap: string) {
@@ -62,7 +63,7 @@ export class TrustedOriginsStore {
     // if permissions or targetUrl are invalid, this function will throw an error
     // this function stablishes all the permissions at once, overwriting whatever was before
     // to enable just one permission use addPermission instead.
-    set = (targetURL: string, permissions: Record<PermissionType, boolean>) => {
+    set = (targetURL: URL, permissions: Record<PermissionType, boolean>) => {
         if (!this.data) {
             return;
         }
@@ -70,54 +71,38 @@ export class TrustedOriginsStore {
         if (!validPermissions) {
             throw new Error(`Invalid permissions set for trusting ${targetURL}`);
         }
-        this.data.set(urlUtils.getHost(targetURL), validPermissions);
+        this.data.set(targetURL.origin, validPermissions);
     };
 
     // enables usage of `targetURL` for `permission`
-    addPermission = (targetURL: string, permission: PermissionType) => {
-        const origin = urlUtils.getHost(targetURL);
-        this.set(origin, {[permission]: true});
-    }
-
-    delete = (targetURL: string) => {
-        let host;
-        try {
-            host = urlUtils.getHost(targetURL);
-            this.data?.delete(host);
-        } catch {
-            return false;
-        }
-        return true;
-    }
-
-    isExisting = (targetURL: string) => {
-        return this.data?.has(urlUtils.getHost(targetURL)) || false;
+    addPermission = (targetURL: URL, permission: PermissionType) => {
+        this.set(targetURL, {[permission]: true});
     };
 
-    // if user hasn't set his preferences, it will return null (falsy)
-    checkPermission = (targetURL: string, permission: PermissionType) => {
+    delete = (targetURL: URL) => {
+        return this.data?.delete(targetURL.origin);
+    };
+
+    isExisting = (targetURL: URL) => {
+        return this.data?.has(targetURL.origin) || false;
+    };
+
+    checkPermission = (targetURL: URL, permission: PermissionType) => {
         if (!permission) {
             log.error(`Missing permission request on ${targetURL}`);
             return null;
         }
-        let origin;
-        try {
-            origin = urlUtils.getHost(targetURL);
-        } catch (e) {
-            log.error(`invalid host to retrieve permissions: ${targetURL}: ${e}`);
-            return null;
-        }
 
-        const urlPermissions = this.data?.get(origin);
+        const urlPermissions = this.data?.get(targetURL.origin);
         return urlPermissions ? urlPermissions[permission] : undefined;
-    }
+    };
 }
 
 const trustedOriginsStore = new TrustedOriginsStore(trustedOriginsStoreFile);
 export default trustedOriginsStore;
 
 ipcMain.on(UPDATE_PATHS, () => {
-    log.debug('trustedOriginsStore.UPDATE_PATHS');
+    log.debug('UPDATE_PATHS');
     trustedOriginsStore.storeFile = trustedOriginsStoreFile;
     if (trustedOriginsStore.data) {
         trustedOriginsStore.load();

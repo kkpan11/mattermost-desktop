@@ -1,22 +1,24 @@
 // Copyright (c) 2016-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
-import {AuthenticationResponseDetails, AuthInfo, WebContents} from 'electron';
-import log from 'electron-log';
+import type {AuthenticationResponseDetails, AuthInfo, WebContents, Event} from 'electron';
 
-import {PermissionType} from 'types/trustedOrigin';
-import {LoginModalData} from 'types/auth';
-
+import {ModalConstants} from 'common/constants';
+import {Logger} from 'common/log';
 import {BASIC_AUTH_PERMISSION} from 'common/permissions';
-import urlUtils from 'common/utils/url';
-
-import modalManager from 'main/views/modalManager';
+import {isTrustedURL, parseURL} from 'common/utils/url';
 import TrustedOriginsStore from 'main/trustedOrigins';
-import {getLocalURLString, getLocalPreload} from 'main/utils';
-import WindowManager from 'main/windows/windowManager';
+import {getLocalPreload} from 'main/utils';
+import modalManager from 'main/views/modalManager';
+import ViewManager from 'main/views/viewManager';
+import MainWindow from 'main/windows/mainWindow';
 
-const preload = getLocalPreload('desktopAPI.js');
-const loginModalHtml = getLocalURLString('loginModal.html');
-const permissionModalHtml = getLocalURLString('permissionModal.html');
+import type {LoginModalData} from 'types/auth';
+import type {PermissionType} from 'types/trustedOrigin';
+
+const log = new Logger('AuthManager');
+const preload = getLocalPreload('internalAPI.js');
+const loginModalHtml = 'mattermost-desktop://renderer/loginModal.html';
+const permissionModalHtml = 'mattermost-desktop://renderer/permissionModal.html';
 
 type LoginModalResult = {
     username: string;
@@ -31,32 +33,33 @@ export class AuthManager {
     }
 
     handleAppLogin = (event: Event, webContents: WebContents, request: AuthenticationResponseDetails, authInfo: AuthInfo, callback?: (username?: string, password?: string) => void) => {
-        log.verbose('AuthManager.handleAppLogin', {request, authInfo});
+        log.verbose('handleAppLogin', {request, authInfo});
 
         event.preventDefault();
-        const parsedURL = urlUtils.parseURL(request.url);
+        const parsedURL = parseURL(request.url);
         if (!parsedURL) {
             return;
         }
-        const serverURL = WindowManager.getServerURLFromWebContentsId(webContents.id);
+        const serverURL = ViewManager.getViewByWebContentsId(webContents.id)?.view.server.url;
         if (!serverURL) {
             return;
         }
 
         this.loginCallbackMap.set(request.url, callback); // if callback is undefined set it to null instead so we know we have set it up with no value
-        if (urlUtils.isTrustedURL(request.url, serverURL) || urlUtils.isCustomLoginURL(parsedURL, serverURL) || TrustedOriginsStore.checkPermission(request.url, BASIC_AUTH_PERMISSION)) {
+        if (isTrustedURL(parsedURL, serverURL) || TrustedOriginsStore.checkPermission(parsedURL, BASIC_AUTH_PERMISSION)) {
             this.popLoginModal(request, authInfo);
         } else {
             this.popPermissionModal(request, authInfo, BASIC_AUTH_PERMISSION);
         }
-    }
+    };
 
     popLoginModal = (request: AuthenticationResponseDetails, authInfo: AuthInfo) => {
-        const mainWindow = WindowManager.getMainWindow();
+        const mainWindow = MainWindow.get();
         if (!mainWindow) {
             return;
         }
-        const modalPromise = modalManager.addModal<LoginModalData, LoginModalResult>(authInfo.isProxy ? `proxy-${authInfo.host}` : `login-${request.url}`, loginModalHtml, preload, {request, authInfo}, mainWindow);
+        const modalKey = authInfo.isProxy ? `${ModalConstants.PROXY_LOGIN_MODAL}-${authInfo.host}` : `${ModalConstants.LOGIN_MODAL}-${request.url}`;
+        const modalPromise = modalManager.addModal<LoginModalData, LoginModalResult>(modalKey, loginModalHtml, preload, {request, authInfo}, mainWindow);
         if (modalPromise) {
             modalPromise.then((data) => {
                 const {username, password} = data;
@@ -68,14 +71,14 @@ export class AuthManager {
                 this.handleCancelLoginEvent(request);
             });
         }
-    }
+    };
 
     popPermissionModal = (request: AuthenticationResponseDetails, authInfo: AuthInfo, permission: PermissionType) => {
-        const mainWindow = WindowManager.getMainWindow();
+        const mainWindow = MainWindow.get();
         if (!mainWindow) {
             return;
         }
-        const modalPromise = modalManager.addModal(`permission-${request.url}`, permissionModalHtml, preload, {url: request.url, permission}, mainWindow);
+        const modalPromise = modalManager.addModal(`${ModalConstants.PERMISSION_MODAL}-${request.url}`, permissionModalHtml, preload, {url: request.url, permission}, mainWindow);
         if (modalPromise) {
             modalPromise.then(() => {
                 this.handlePermissionGranted(request.url, permission);
@@ -87,7 +90,7 @@ export class AuthManager {
                 this.handleCancelLoginEvent(request);
             });
         }
-    }
+    };
 
     handleLoginCredentialsEvent = (request: AuthenticationResponseDetails, username?: string, password?: string) => {
         const callback = this.loginCallbackMap.get(request.url);
@@ -99,15 +102,19 @@ export class AuthManager {
             callback(username, password);
         }
         this.loginCallbackMap.delete(request.url);
-    }
+    };
 
     handleCancelLoginEvent = (request: AuthenticationResponseDetails) => {
         log.info(`Cancelling request for ${request ? request.url : 'unknown'}`);
         this.handleLoginCredentialsEvent(request); // we use undefined to cancel the request
-    }
+    };
 
     handlePermissionGranted(url: string, permission: PermissionType) {
-        TrustedOriginsStore.addPermission(url, permission);
+        const parsedURL = parseURL(url);
+        if (!parsedURL) {
+            return;
+        }
+        TrustedOriginsStore.addPermission(parsedURL, permission);
         TrustedOriginsStore.save();
     }
 }

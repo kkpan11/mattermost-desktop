@@ -5,12 +5,12 @@ import os from 'os';
 import path from 'path';
 
 import {app, Notification} from 'electron';
-
-import {MentionOptions} from 'types/notification';
+import {v4 as uuid} from 'uuid';
 
 import Utils from 'common/utils/util';
-
 import {localizeMessage} from 'main/i18nManager';
+
+import type {MentionOptions} from 'types/notification';
 
 const assetsDir = path.resolve(app.getAppPath(), 'assets');
 const appIconURL = path.resolve(assetsDir, 'appicon_48.png');
@@ -25,28 +25,30 @@ const DEFAULT_WIN7 = 'Ding';
 
 export class Mention extends Notification {
     customSound: string;
-    channel: {id: string}; // TODO: Channel from mattermost-redux
+    channelId: string;
     teamId: string;
+    uId: string;
 
-    constructor(customOptions: MentionOptions, channel: {id: string}, teamId: string) {
+    constructor(customOptions: MentionOptions, channelId: string, teamId: string) {
         const options = {...defaultOptions, ...customOptions};
         if (process.platform === 'darwin' || (process.platform === 'win32' && Utils.isVersionGreaterThanOrEqualTo(os.release(), '10.0'))) {
             // Notification Center shows app's icon, so there were two icons on the notification.
             Reflect.deleteProperty(options, 'icon');
         }
         const isWin7 = (process.platform === 'win32' && !Utils.isVersionGreaterThanOrEqualTo(os.release(), '6.3') && DEFAULT_WIN7);
-        const customSound = String(!options.silent && ((options.data && options.data.soundName !== 'None' && options.data.soundName) || isWin7));
+        const customSound = String(!options.silent && ((options.soundName !== 'None' && options.soundName) || isWin7));
         if (customSound) {
             options.silent = true;
         }
         super(options);
 
         this.customSound = customSound;
-        this.channel = channel;
+        this.channelId = channelId;
         this.teamId = teamId;
+        this.uId = uuid();
     }
 
     getNotificationSound = () => {
         return this.customSound;
-    }
+    };
 }

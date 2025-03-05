@@ -2,13 +2,12 @@
 // Copyright (c) 2016-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import 'bootstrap/dist/css/bootstrap.min.css';
 import 'renderer/css/index.css';
 
 import React from 'react';
 import ReactDOM from 'react-dom';
 
-import {CombinedConfig, Team} from 'types/config';
+import type {CombinedConfig} from 'types/config';
 
 import MainPage from './components/MainPage';
 import IntlProvider from './intl_provider';
@@ -43,48 +42,6 @@ class Root extends React.PureComponent<Record<string, never>, State> {
     setInitialConfig = async () => {
         const config = await this.requestConfig(true);
         this.setState({config});
-    }
-
-    moveTabs = (teamName: string, originalOrder: number, newOrder: number): number | undefined => {
-        if (!this.state.config) {
-            throw new Error('No config');
-        }
-        const teams = this.state.config.teams.concat();
-        const currentTeamIndex = teams.findIndex((team) => team.name === teamName);
-        const tabs = teams[currentTeamIndex].tabs.concat();
-
-        const tabOrder = tabs.map((team, index) => {
-            return {
-                index,
-                order: team.order,
-            };
-        }).sort((a, b) => (a.order - b.order));
-
-        const team = tabOrder.splice(originalOrder, 1);
-        tabOrder.splice(newOrder, 0, team[0]);
-
-        let teamIndex: number | undefined;
-        tabOrder.forEach((t, order) => {
-            if (order === newOrder) {
-                teamIndex = t.index;
-            }
-            tabs[t.index].order = order;
-        });
-        teams[currentTeamIndex].tabs = tabs;
-        this.setState({
-            config: {
-                ...this.state.config,
-                teams,
-            },
-        });
-        this.teamConfigChange(teams);
-        return teamIndex;
-    };
-
-    teamConfigChange = async (updatedTeams: Team[]) => {
-        window.desktop.updateTeams(updatedTeams).then(() => {
-            this.reloadConfig();
-        });
     };
 
     reloadConfig = async () => {
@@ -98,7 +55,7 @@ class Root extends React.PureComponent<Record<string, never>, State> {
             const configRequest = await window.desktop.getConfiguration() as CombinedConfig;
             return configRequest;
         } catch (err: any) {
-            console.log(`there was an error with the config: ${err}`);
+            console.error(`there was an error with the config: ${err}`);
             if (exitOnError) {
                 window.desktop.quit(`unable to load configuration: ${err}`, err.stack);
             }
@@ -110,7 +67,7 @@ class Root extends React.PureComponent<Record<string, never>, State> {
         if (window.process.platform !== 'darwin') {
             window.desktop.openAppMenu();
         }
-    }
+    };
 
     render() {
         const {config} = this.state;
@@ -120,13 +77,9 @@ class Root extends React.PureComponent<Record<string, never>, State> {
         return (
             <IntlProvider>
                 <MainPage
-                    teams={config.teams}
-                    lastActiveTeam={config.lastActiveTeam}
-                    moveTabs={this.moveTabs}
                     openMenu={this.openMenu}
                     darkMode={config.darkMode}
                     appName={config.appName}
-                    useNativeWindow={config.useNativeWindow}
                 />
             </IntlProvider>
         );

@@ -1,10 +1,9 @@
 // Copyright (c) 2016-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
+import classNames from 'classnames';
 import React, {useState, useEffect} from 'react';
 import {useIntl} from 'react-intl';
-
-import classNames from 'classnames';
 
 import 'renderer/css/components/Input.scss';
 
@@ -22,7 +21,7 @@ export enum SIZE {
 }
 
 export type CustomMessageInputType = {
-    type: 'info' | 'error' | 'warning' | 'success';
+    type: STATUS;
     value: string;
 } | null;
 
@@ -41,7 +40,6 @@ interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
     useLegend?: boolean;
     customMessage?: CustomMessageInputType;
     inputSize?: SIZE;
-    darkMode?: boolean;
 }
 
 const Input = React.forwardRef((
@@ -66,7 +64,6 @@ const Input = React.forwardRef((
         maxLength,
         inputSize = SIZE.MEDIUM,
         disabled,
-        darkMode,
         onFocus,
         onBlur,
         onChange,
@@ -129,7 +126,6 @@ const Input = React.forwardRef((
                 containerClassName,
                 {
                     disabled,
-                    'Input_container-inverted': darkMode,
                 },
             )}
         >

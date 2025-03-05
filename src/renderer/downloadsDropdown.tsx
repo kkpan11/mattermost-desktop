@@ -1,15 +1,15 @@
 // Copyright (c) 2016-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
+import classNames from 'classnames';
 import React from 'react';
 import ReactDOM from 'react-dom';
-import classNames from 'classnames';
 import {FormattedMessage} from 'react-intl';
 
-import {DownloadedItem, DownloadedItems} from 'types/downloads';
+import type {DownloadedItem, DownloadedItems} from 'types/downloads';
 
-import IntlProvider from './intl_provider';
 import DownloadsDropdownItem from './components/DownloadsDropdown/DownloadsDropdownItem';
+import IntlProvider from './intl_provider';
 
 import './css/downloadsDropdown.scss';
 
@@ -18,6 +18,7 @@ type State = {
     darkMode?: boolean;
     windowBounds?: Electron.Rectangle;
     item?: DownloadedItem;
+    appName?: string;
 }
 
 class DownloadsDropdown extends React.PureComponent<Record<string, never>, State> {
@@ -40,6 +41,9 @@ class DownloadsDropdown extends React.PureComponent<Record<string, never>, State
             window.desktop.downloadsDropdown.focus();
         });
 
+        window.desktop.getVersion().then(({name}) => {
+            this.setState({appName: name});
+        });
         window.desktop.downloadsDropdown.requestInfo();
     }
 
@@ -64,23 +68,27 @@ class DownloadsDropdown extends React.PureComponent<Record<string, never>, State
             windowBounds,
             item,
         });
-    }
+    };
 
     closeMenu = () => {
         window.desktop.closeDownloadsDropdown();
-    }
+    };
 
     clearAll = () => {
         if (!this.clearAllButtonDisabled()) {
             window.desktop.downloadsDropdown.requestClearDownloadsDropdown();
         }
-    }
+    };
 
     clearAllButtonDisabled = () => {
         return this.state.downloads?.length === 1 && this.state.downloads[0]?.type === 'update';
-    }
+    };
 
     render() {
+        if (!this.state.appName) {
+            return null;
+        }
+
         return (
             <IntlProvider>
                 <div
@@ -115,6 +123,7 @@ class DownloadsDropdown extends React.PureComponent<Record<string, never>, State
                                     item={downloadItem}
                                     key={downloadItem.filename}
                                     activeItem={this.state.item}
+                                    appName={this.state.appName || ''}
                                 />
                             );
                         })}

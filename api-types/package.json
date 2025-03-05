@@ -1,0 +1,34 @@
+{
+  "name": "@mattermost/desktop-api",
+  "version": "5.10.0-2",
+  "description": "Shared types for the Desktop App API provided to the Web App",
+  "keywords": [
+    "mattermost"
+  ],
+  "homepage": "https://github.com/mattermost/desktop",
+  "license": "MIT",
+  "files": [
+    "lib"
+  ],
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "repository": {
+    "type": "git",
+    "url": "github:mattermost/desktop",
+    "directory": "api-types"
+  },
+  "peerDependencies": {
+    "typescript": "^4.3.0 || ^5.0.0"
+  },
+  "peerDependenciesMeta": {
+    "typescript": {
+      "optional": true
+    }
+  },
+  "scripts": {
+    "build": "tsc --build --verbose",
+    "run": "tsc --watch --preserveWatchOutput",
+    "clean": "rm -rf tsconfig.tsbuildinfo ./lib",
+    "prepublishOnly": "npm run build && rm -rf ./lib/tsconfig.tsbuildinfo"
+  }
+}

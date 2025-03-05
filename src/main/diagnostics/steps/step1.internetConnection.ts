@@ -1,17 +1,18 @@
 // Copyright (c) 2016-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import {ElectronLog} from 'electron-log';
-import {DiagnosticStepResponse} from 'types/diagnostics';
+import type {MainLogger} from 'electron-log';
 
-import DiagnosticsStep from '../DiagnosticStep';
+import type {DiagnosticStepResponse} from 'types/diagnostics';
 
 import {isOnline} from './internal/utils';
+
+import DiagnosticsStep from '../DiagnosticStep';
 
 const stepName = 'Step-1';
 const stepDescriptiveName = 'internetConnection';
 
-const run = async (logger: ElectronLog): Promise<DiagnosticStepResponse> => {
+const run = async (logger: MainLogger): Promise<DiagnosticStepResponse> => {
     try {
         const success = await isOnline(logger);
         if (success) {
